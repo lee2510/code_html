@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geth Wallet Manager</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #4B5EAA 0%, #6B7280 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1F2937;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .card { 
+      background: #FFFFFF; 
+      border-radius: 16px; 
+      padding: 30px; 
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    input, button, select { 
+      width: 100%; 
+      padding: 12px 16px; 
+      border-radius: 8px; 
+      border: 2px solid #D1D5DB;
+      font-size: 14px;
+      margin-bottom: 12px;
+      transition: all 0.3s;
+    }
+    input:focus { border-color: #6366F1; outline: none; }
+    button { 
+      background: linear-gradient(135deg, #4B5EAA 0%, #6366F1 100%);
+      color: #FFFFFF; 
+      border: none; 
+      cursor: pointer;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(75,94,170,0.3); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    button.secondary { background: #E5E7EB; color: #1F2937; }
+    button.danger { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); }
+    button.success { background: linear-gradient(135deg, #0D9488 0%, #047857 100%); }
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .tab { 
+      flex: 1; 
+      min-width: 120px;
+      padding: 14px 20px; 
+      background: #E5E7EB; 
+      border: none; 
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      color: #1F2937;
+      transition: all 0.3s;
+    }
+    .tab.active { 
+      background: linear-gradient(135deg, #4B5EAA 0%, #6366F1 100%);
+      color: #FFFFFF;
+      box-shadow: 0 5px 15px rgba(75,94,170,0.3);
+    }
+    .message { 
+      padding: 15px; 
+      border-radius: 10px; 
+      margin-top: 15px;
+      animation: slideIn 0.3s;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    .message.success { background: #D1FAE5; color: #065F46; border-left: 4px solid #0D9488; }
+    .message.error { background: #FEE2E2; color: #991B1B; border-left: 4px solid #DC2626; }
+    .message.info { background: #FEF3C7; color: #92400E; border-left: 4px solid #F59E0B; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th { background: #F3F4F6; padding: 12px; text-align: left; font-weight: 600; color: #1F2937; }
+    td { padding: 12px; border-bottom: 1px solid #E5E7EB; font-size: 13px; color: #4B5563; }
+    tr:hover { background: #F9FAFB; }
+    .header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    .balance-display { 
+      font-size: 32px; 
+      font-weight: bold; 
+      color: #4B5EAA;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+    .address { 
+      font-family: 'Courier New', monospace; 
+      font-size: 12px; 
+      color: #6B7280;
+      word-break: break-all;
+    }
+    .log-entry { 
+      background: #F3F4F6; 
+      padding: 12px; 
+      margin-bottom: 8px; 
+      border-radius: 8px;
+      border-left: 4px solid #6366F1;
+    }
+    .log-header { 
+      display: flex; 
+      justify-content: space-between; 
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #1F2937;
+    }
+    .log-data { 
+      font-size: 12px; 
+      color: #4B5563; 
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .status-success { background: #0D9488; color: #FFFFFF; }
+    .status-failed { background: #DC2626; color: #FFFFFF; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    @media (max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .header { flex-direction: column; text-align: center; }
+    }
+    h1, h2 { margin-bottom: 15px; color: #1F2937; }
+    h1 { font-size: 28px; }
+    h2 { font-size: 20px; }
+    .loading { text-align: center; padding: 40px; color: #F3F4F6; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <div id="app" class="container">
+    <div class="loading">⏳ Đang khởi tạo ví...</div>
+  </div>
+
+  <script>
+    const GETH_RPC = 'https://w7q1h32j-8545.asse.devtunnels.ms/';
+    let web3;
+    let currentAccount = null;
+    let currentPage = 'login';
+
+    // Khởi tạo Web3
+    async function initWeb3() {
+      try {
+        web3 = new Web3(new Web3.providers.HttpProvider(GETH_RPC));
+        const networkId = await web3.eth.net.getId();
+        console.log('✅ Kết nối Geth thành công - Network ID:', networkId);
+        return true;
+      } catch (err) {
+        console.error('❌ Không thể kết nối Geth:', err);
+        return false;
+      }
+    }
+
+    // Ghi log vào localStorage (giả lập backend log)
+    function logToBackend(event, data) {
+      const logs = JSON.parse(localStorage.getItem('gethLogs') || '[]');
+      logs.unshift({
+        event,
+        data,
+        timestamp: new Date().toISOString()
+      });
+      localStorage.setItem('gethLogs', JSON.stringify(logs.slice(0, 100)));
+      console.log(`[GETH LOG] ${event}:`, data);
+    }
+
+    // Tạo tài khoản mới
+    async function createAccount(password) {
+      try {
+        const account = web3.eth.accounts.create();
+        const encrypted = web3.eth.accounts.encrypt(account.privateKey, password);
+        
+        logToBackend('ACCOUNT_CREATED', {
+          address: account.address,
+          timestamp: new Date().toISOString()
+        });
+
+        return { address: account.address, encrypted: JSON.stringify(encrypted) };
+      } catch (err) {
+        throw new Error('Không thể tạo tài khoản: ' + err.message);
+      }
+    }
+
+    // Tạo test account với 100 ETH
+    async function createTestAccount() {
+      try {
+        const accounts = await web3.eth.getAccounts();
+        if (!accounts || accounts.length === 0) {
+          throw new Error('Không có account Geth! Chạy: geth --dev --http --http.api eth,net,web3');
+        }
+
+        const newAccount = web3.eth.accounts.create();
+        const password = '123456';
+        const encrypted = web3.eth.accounts.encrypt(newAccount.privateKey, password);
+
+        // Chuyển 100 ETH từ account Geth mặc định
+        const txHash = await web3.eth.sendTransaction({
+          from: accounts[0],
+          to: newAccount.address,
+          value: web3.utils.toWei('100', 'ether'),
+          gas: 21000
+        });
+
+        logToBackend('TEST_ACCOUNT_CREATED', {
+          address: newAccount.address,
+          fundedWith: '100 ETH',
+          txHash: txHash.transactionHash,
+          timestamp: new Date().toISOString()
+        });
+
+        return { 
+          address: newAccount.address, 
+          encrypted: JSON.stringify(encrypted),
+          password 
+        };
+      } catch (err) {
+        throw new Error('Lỗi tạo test account: ' + err.message);
+      }
+    }
+
+    // Kiểm tra số dư
+    async function getBalance(address) {
+      try {
+        const balance = await web3.eth.getBalance(address);
+        return web3.utils.fromWei(balance, 'ether');
+      } catch (err) {
+        throw new Error('Không thể lấy số dư: ' + err.message);
+      }
+    }
+
+    // Gửi giao dịch
+    async function sendTransaction(fromAddress, toAddress, amount, password) {
+      try {
+        const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+        const account = accounts.find(a => a.address.toLowerCase() === fromAddress.toLowerCase());
+        
+        if (!account) throw new Error('Không tìm thấy tài khoản!');
+
+        let decrypted;
+        try {
+          decrypted = web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
+        } catch {
+          throw new Error('Mật khẩu không đúng!');
+        }
+
+        const valueWei = web3.utils.toWei(amount.toString(), 'ether');
+        const balance = await web3.eth.getBalance(fromAddress);
+        
+        if (BigInt(balance) < BigInt(valueWei)) {
+          throw new Error(`Số dư không đủ (có ${web3.utils.fromWei(balance, 'ether')} ETH)`);
+        }
+
+        const gasPrice = await web3.eth.getGasPrice();
+        const tx = {
+          from: fromAddress,
+          to: toAddress,
+          value: valueWei,
+          gas: 21000,
+          gasPrice: gasPrice
+        };
+
+        const signedTx = await web3.eth.accounts.signTransaction(tx, decrypted.privateKey);
+        const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+        logToBackend('TRANSACTION_SENT', {
+          hash: receipt.transactionHash,
+          from: fromAddress,
+          to: toAddress,
+          value: amount,
+          blockNumber: receipt.blockNumber,
+          timestamp: new Date().toISOString()
+        });
+
+        return receipt;
+      } catch (err) {
+        throw new Error('Lỗi gửi giao dịch: ' + err.message);
+      }
+    }
+
+    // === UI RENDERING ===
+    function render() {
+      const app = document.getElementById('app');
+      
+      if (currentPage === 'login') {
+        app.innerHTML = renderLoginPage();
+      } else if (currentPage === 'dashboard') {
+        app.innerHTML = renderDashboard();
+      }
+    }
+
+    function renderLoginPage() {
+      const mode = localStorage.getItem('authMode') || 'login';
+      
+      return `
+        <div class="card" style="max-width: 500px; margin: 50px auto;">
+          <h1 style="text-align: center;">🔐 Ví Blockchain</h1>
+          <p style="text-align: center; color: #6B7280; margin-bottom: 25px;">
+            ${mode === 'login' ? 'Đăng nhập tài khoản' : 'Tạo tài khoản mới'}
+          </p>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="tab ${mode === 'login' ? 'active' : ''}" onclick="switchAuthMode('login')">
+              🔓 Đăng nhập
+            </button>
+            <button class="tab ${mode === 'register' ? 'active' : ''}" onclick="switchAuthMode('register')">
+              📝 Đăng ký
+            </button>
+          </div>
+
+          ${mode === 'register' ? `
+            <div>
+              <input type="password" id="password" placeholder="Mật khẩu (≥ 6 ký tự)" />
+              <input type="password" id="confirmPassword" placeholder="Xác nhận mật khẩu" />
+              <button onclick="handleRegister()">✨ Tạo tài khoản</button>
+              <div style="text-align: center; margin: 10px 0; color: #6B7280;">hoặc</div>
+              <button class="success" onclick="handleTestAccount()">🎁 Tạo test account (100 ETH)</button>
+            </div>
+          ` : `
+            <div>
+              <input type="text" id="loginAddress" placeholder="Địa chỉ ví (0x...)" />
+              <input type="password" id="loginPassword" placeholder="Mật khẩu" />
+              <button onclick="handleLogin()">🚀 Đăng nhập</button>
+            </div>
+          `}
+
+          <div id="authMessage"></div>
+        </div>
+      `;
+    }
+
+    function renderDashboard() {
+      const activeTab = localStorage.getItem('dashboardTab') || 'balance';
+      
+      return `
+        <div class="card">
+          <div class="header">
+            <div>
+              <h1>💼 Ví của bạn</h1>
+              <div class="address">${currentAccount}</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="balance-display" id="currentBalance">0 ETH</div>
+              <button class="danger" onclick="handleLogout()" style="width: auto; margin-top: 10px;">
+                🚪 Đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab ${activeTab === 'balance' ? 'active' : ''}" onclick="switchTab('balance')">
+            💰 Số dư
+          </button>
+          <button class="tab ${activeTab === 'transfer' ? 'active' : ''}" onclick="switchTab('transfer')">
+            💸 Chuyển tiền
+          </button>
+          <button class="tab ${activeTab === 'history' ? 'active' : ''}" onclick="switchTab('history')">
+            📜 Lịch sử
+          </button>
+          <button class="tab ${activeTab === 'logs' ? 'active' : ''}" onclick="switchTab('logs')">
+            📊 Logs
+          </button>
+        </div>
+
+        <div class="card" id="tabContent"></div>
+      `;
+    }
+
+    function renderBalanceTab() {
+      return `
+        <h2>💰 Kiểm tra số dư</h2>
+        <input type="text" id="checkAddress" placeholder="Nhập địa chỉ ví" value="${currentAccount}" />
+        <button onclick="checkBalance()">🔍 Kiểm tra</button>
+        <div id="balanceResult"></div>
+      `;
+    }
+
+    function renderTransferTab() {
+      return `
+        <h2>💸 Chuyển tiền</h2>
+        <input type="text" value="${currentAccount}" disabled />
+        <input type="text" id="transferTo" placeholder="Địa chỉ nhận (0x...)" />
+        <input type="number" id="transferAmount" placeholder="Số ETH" step="0.001" />
+        <input type="password" id="transferPassword" placeholder="Mật khẩu ví" />
+        <button onclick="handleTransfer()">🚀 Gửi giao dịch</button>
+        <div id="transferMessage"></div>
+      `;
+    }
+
+    function renderHistoryTab() {
+      const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
+      
+      if (history.length === 0) {
+        return '<h2>📜 Lịch sử giao dịch</h2><p style="text-align: center; color: #6B7280; padding: 40px;">Chưa có giao dịch nào</p>';
+      }
+
+      return `
+        <h2>📜 Lịch sử giao dịch</h2>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Từ</th>
+                <th>Đến</th>
+                <th style="text-align: right;">Số tiền</th>
+                <th style="text-align: center;">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${history.map(tx => `
+                <tr>
+                  <td>${new Date(tx.timestamp).toLocaleString('vi-VN')}</td>
+                  <td class="address">${tx.from.slice(0, 10)}...</td>
+                  <td class="address">${tx.to.slice(0, 10)}...</td>
+                  <td style="text-align: right; font-weight: bold;">${tx.value} ETH</td>
+                  <td style="text-align: center;">
+                    <span class="status-badge ${tx.status === 'success' ? 'status-success' : 'status-failed'}">
+                      ${tx.status === 'success' ? '✓' : '✗'}
+                    </span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderLogsTab() {
+      const logs = JSON.parse(localStorage.getItem('gethLogs') || '[]');
+      
+      if (logs.length === 0) {
+        return '<h2>📊 Backend Logs</h2><p style="text-align: center; color: #6B7280; padding: 40px;">Chưa có log nào</p>';
+      }
+
+      return `
+        <h2>📊 Backend Logs</h2>
+        <div style="max-height: 500px; overflow-y: auto;">
+          ${logs.map(log => `
+            <div class="log-entry">
+              <div class="log-header">
+                <span style="color: #6366F1;">${log.event}</span>
+                <span style="font-size: 12px; color: #6B7280;">${new Date(log.timestamp).toLocaleString('vi-VN')}</span>
+              </div>
+              <div class="log-data">${JSON.stringify(log.data, null, 2)}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    // === EVENT HANDLERS ===
+    function switchAuthMode(mode) {
+      localStorage.setItem('authMode', mode);
+      render();
+    }
+
+    function switchTab(tab) {
+      localStorage.setItem('dashboardTab', tab);
+      const content = document.getElementById('tabContent');
+      
+      if (tab === 'balance') content.innerHTML = renderBalanceTab();
+      else if (tab === 'transfer') content.innerHTML = renderTransferTab();
+      else if (tab === 'history') content.innerHTML = renderHistoryTab();
+      else if (tab === 'logs') content.innerHTML = renderLogsTab();
+    }
+
+    async function handleRegister() {
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      const messageEl = document.getElementById('authMessage');
+
+      if (password.length < 6) {
+        messageEl.innerHTML = '<div class="message error">❌ Mật khẩu phải ≥ 6 ký tự</div>';
+        return;
+      }
+      if (password !== confirmPassword) {
+        messageEl.innerHTML = '<div class="message error">❌ Mật khẩu xác nhận không khớp</div>';
+        return;
+      }
+
+      messageEl.innerHTML = '<div class="message info">⏳ Đang tạo tài khoản...</div>';
+
+      try {
+        const { address, encrypted } = await createAccount(password);
+        
+        const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+        accounts.push({
+          address,
+          encrypted,
+          createdAt: new Date().toISOString(),
+          type: 'user'
+        });
+        localStorage.setItem('walletAccounts', JSON.stringify(accounts));
+
+        messageEl.innerHTML = `<div class="message success">✅ Tạo tài khoản thành công!<br><small>${address}</small></div>`;
+        
+        setTimeout(() => {
+          currentAccount = address;
+          localStorage.setItem('currentAccount', address);
+          currentPage = 'dashboard';
+          render();
+          loadBalance();
+        }, 1500);
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+      }
+    }
+
+    async function handleTestAccount() {
+      const messageEl = document.getElementById('authMessage');
+      messageEl.innerHTML = '<div class="message info">⏳ Đang tạo test account...</div>';
+
+      try {
+        const { address, encrypted } = await createTestAccount();
+        
+        const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+        accounts.push({
+          address,
+          encrypted,
+          createdAt: new Date().toISOString(),
+          type: 'test'
+        });
+        localStorage.setItem('walletAccounts', JSON.stringify(accounts));
+
+        messageEl.innerHTML = `<div class="message success">✅ Test account: ${address}<br>💰 Số dư: 100 ETH<br>🔑 Mật khẩu: 123456</div>`;
+        
+        setTimeout(() => {
+          currentAccount = address;
+          localStorage.setItem('currentAccount', address);
+          currentPage = 'dashboard';
+          render();
+          loadBalance();
+        }, 2000);
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+      }
+    }
+
+    async function handleLogin() {
+      const address = document.getElementById('loginAddress').value;
+      const password = document.getElementById('loginPassword').value;
+      const messageEl = document.getElementById('authMessage');
+
+      if (!address || !password) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập đầy đủ thông tin</div>';
+        return;
+      }
+
+      messageEl.innerHTML = '<div class="message info">⏳ Đang đăng nhập...</div>';
+
+      try {
+        const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+        const account = accounts.find(a => a.address.toLowerCase() === address.toLowerCase());
+        
+        if (!account) {
+          messageEl.innerHTML = '<div class="message error">❌ Tài khoản không tồn tại</div>';
+          return;
+        }
+
+        // Verify password
+        web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
+        
+        logToBackend('LOGIN_SUCCESS', { address });
+        messageEl.innerHTML = '<div class="message success">✅ Đăng nhập thành công!</div>';
+        
+        setTimeout(() => {
+          currentAccount = address;
+          localStorage.setItem('currentAccount', address);
+          currentPage = 'dashboard';
+          render();
+          loadBalance();
+        }, 1000);
+      } catch (err) {
+        messageEl.innerHTML = '<div class="message error">❌ Sai mật khẩu!</div>';
+      }
+    }
+
+    function handleLogout() {
+      if (confirm('Bạn có chắc chắn muốn đăng xuất?')) {
+        currentAccount = null;
+        localStorage.removeItem('currentAccount');
+        currentPage = 'login';
+        render();
+      }
+    }
+
+    async function loadBalance() {
+      if (!currentAccount) return;
+      
+      try {
+        const balance = await getBalance(currentAccount);
+        const balanceEl = document.getElementById('currentBalance');
+        if (balanceEl) {
+          balanceEl.textContent = Number.parseFloat(balance).toFixed(4) + ' ETH';
+        }
+      } catch (err) {
+        console.error('Lỗi load balance:', err);
+      }
+    }
+
+    async function checkBalance() {
+      const address = document.getElementById('checkAddress').value;
+      const resultEl = document.getElementById('balanceResult');
+
+      if (!address) {
+        resultEl.innerHTML = '<div class="message error">❌ Vui lòng nhập địa chỉ</div>';
+        return;
+      }
+
+      resultEl.innerHTML = '<div class="message info">⏳ Đang kiểm tra...</div>';
+
+      try {
+        const balance = await getBalance(address);
+        resultEl.innerHTML = `<div class="message success">💰 Số dư: <strong>${Number.parseFloat(balance).toFixed(6)} ETH</strong></div>`;
+      } catch (err) {
+        resultEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+      }
+    }
+
+    async function handleTransfer() {
+      const to = document.getElementById('transferTo').value;
+      const amount = document.getElementById('transferAmount').value;
+      const password = document.getElementById('transferPassword').value;
+      const messageEl = document.getElementById('transferMessage');
+
+      if (!to || !amount || !password) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập đầy đủ thông tin</div>';
+        return;
+      }
+
+      messageEl.innerHTML = '<div class="message info">⏳ Đang gửi giao dịch...</div>';
+
+      try {
+        const receipt = await sendTransaction(currentAccount, to, amount, password);
+        
+        // Lưu vào history
+        const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
+        history.unshift({
+          hash: receipt.transactionHash,
+          from: currentAccount,
+          to,
+          value: amount,
+          blockNumber: receipt.blockNumber,
+          status: receipt.status ? 'success' : 'failed',
+          timestamp: new Date().toISOString()
+        });
+        localStorage.setItem('txHistory', JSON.stringify(history));
+
+        messageEl.innerHTML = `<div class="message success">✅ Thành công!<br><small>Hash: ${receipt.transactionHash}</small></div>`;
+        
+        document.getElementById('transferTo').value = '';
+        document.getElementById('transferAmount').value = '';
+        document.getElementById('transferPassword').value = '';
+        
+        loadBalance();
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+      }
+    }
+
+    // === INITIALIZATION ===
+    async function init() {
+      const connected = await initWeb3();
+      
+      if (!connected) {
+        document.getElementById('app').innerHTML = `
+          <div class="card" style="max-width: 600px; margin: 50px auto; text-align: center;">
+            <h1 style="color: #DC2626;">❌ Không thể kết nối Geth</h1>
+            <p style="margin: 20px 0;">Vui lòng kiểm tra:</p>
+            <ul style="text-align: left; padding-left: 40px;">
+              <li>Geth đã chạy: <code>geth --dev --http --http.api eth,net,web3 --http.corsdomain "*"</code></li>
+              <li>RPC đang lắng nghe tại: <code>http://127.0.0.1:8545</code></li>
+              <li>CORS được bật</li>
+            </ul>
+            <button onclick="location.reload()">🔄 Thử lại</button>
+          </div>
+        `;
+        return;
+      }
+
+      const savedAccount = localStorage.getItem('currentAccount');
+      if (savedAccount) {
+        currentAccount = savedAccount;
+        currentPage = 'dashboard';
+      }
+
+      render();
+      
+      if (currentPage === 'dashboard') {
+        loadBalance();
+        switchTab(localStorage.getItem('dashboardTab') || 'balance');
+        setInterval(loadBalance, 10000);
+      }
+    }
+
+    // Start app
+    init();
+  </script>
+</body>
+</html>
