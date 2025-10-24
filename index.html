@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geth Wallet Manager</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
@@ -128,6 +129,121 @@
     .status-success { background: #0D9488; color: #FFFFFF; }
     .status-failed { background: #DC2626; color: #FFFFFF; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 1000;
+      animation: fadeIn 0.3s;
+    }
+    .modal.show { display: flex; align-items: center; justify-content: center; }
+    .modal-content {
+      background: #FFFFFF;
+      border-radius: 16px;
+      padding: 30px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      animation: slideUp 0.3s;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #E5E7EB;
+    }
+    .modal-close {
+      background: #E5E7EB;
+      border: none;
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+      margin: 0;
+    }
+    .modal-close:hover { background: #D1D5DB; transform: none; }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #F3F4F6;
+    }
+    .detail-label { color: #6B7280; font-weight: 600; }
+    .detail-value { color: #1F2937; font-weight: 500; text-align: right; word-break: break-all; }
+    .search-box {
+      position: relative;
+      margin-bottom: 15px;
+    }
+    .search-box input {
+      padding-right: 100px;
+    }
+    .search-box button {
+      position: absolute;
+      right: 5px;
+      top: 5px;
+      width: auto;
+      padding: 8px 15px;
+      margin: 0;
+    }
+    .gas-fee-box {
+      background: #F3F4F6;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+    .gas-fee-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      font-size: 14px;
+    }
+    .gas-fee-row.total {
+      font-weight: bold;
+      font-size: 16px;
+      color: #4B5EAA;
+      padding-top: 10px;
+      margin-top: 10px;
+      border-top: 2px solid #D1D5DB;
+    }
+    .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #6366F1;
+      color: white;
+      border: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-left: 8px;
+      transition: all 0.3s;
+      padding: 0;
+    }
+    .copy-btn:hover {
+      background: #4F46E5;
+      transform: scale(1.1);
+    }
+    .copy-btn.copied {
+      background: #0D9488;
+    }
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-top: 20px;
+    }
     @media (max-width: 768px) {
       .grid-2 { grid-template-columns: 1fr; }
       .header { flex-direction: column; text-align: center; }
@@ -143,11 +259,54 @@
     <div class="loading">⏳ Đang khởi tạo ví...</div>
   </div>
 
+  <!-- Modal chi tiết giao dịch -->
+  <div id="txDetailModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📋 Chi tiết giao dịch</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
   <script>
-    const GETH_RPC = 'https://w7q1h32j-8545.asse.devtunnels.ms/';
+    const GETH_RPC = 'http://127.0.0.1:8545';
     let web3;
     let currentAccount = null;
     let currentPage = 'login';
+
+    // Lưu lịch sử số dư
+    function saveBalanceHistory(address, balance) {
+      const historyKey = `balanceHistory_${address}`;
+      let history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      
+      const now = new Date().toISOString();
+      const lastEntry = history.atat(history.length - 11);
+      
+      // Chỉ lưu nếu số dư thay đổi hoặc đã qua 1 phút
+      if (!lastEntry || 
+          lastEntry.balance !== balance || 
+          (new Date(now) - new Date(lastEntry.timestamp)) > 60000) {
+        history.push({
+          balance: Number.parseFloat(balance),
+          timestamp: now
+        });
+        
+        // Giới hạn 100 điểm dữ liệu
+        if (history.length > 100) {
+          history = history.slice(-100);
+        }
+        
+        localStorage.setItem(historyKey, JSON.stringify(history));
+      }
+    }
+
+    // Lấy lịch sử số dư
+    function getBalanceHistory(address) {
+      const historyKey = `balanceHistory_${address}`;
+      return JSON.parse(localStorage.getItem(historyKey) || '[]');
+    }
 
     // Khởi tạo Web3
     async function initWeb3() {
@@ -162,7 +321,7 @@
       }
     }
 
-    // Ghi log vào localStorage (giả lập backend log)
+    // Ghi log vào localStorage
     function logToBackend(event, data) {
       const logs = JSON.parse(localStorage.getItem('gethLogs') || '[]');
       logs.unshift({
@@ -188,6 +347,33 @@
         return { address: account.address, encrypted: JSON.stringify(encrypted) };
       } catch (err) {
         throw new Error('Không thể tạo tài khoản: ' + err.message);
+      }
+    }
+
+    // Import account dev từ Geth
+    async function importDevAccount() {
+      try {
+        const accounts = await web3.eth.getAccounts();
+        if (!accounts || accounts.length === 0) {
+          throw new Error('Không có account Geth! Chạy: geth --dev --http --http.api eth,net,web3,personal');
+        }
+
+        const devAddress = accounts[0];
+        const balance = await web3.eth.getBalance(devAddress);
+        
+        logToBackend('DEV_ACCOUNT_IMPORTED', {
+          address: devAddress,
+          balance: web3.utils.fromWei(balance, 'ether') + ' ETH',
+          timestamp: new Date().toISOString()
+        });
+
+        return {
+          address: devAddress,
+          balance: web3.utils.fromWei(balance, 'ether'),
+          type: 'dev'
+        };
+      } catch (err) {
+        throw new Error('Lỗi import dev account: ' + err.message);
       }
     }
 
@@ -238,7 +424,27 @@
       }
     }
 
-    // Gửi giao dịch
+    // Tính gas fee
+    async function estimateGasFee(fromAddress, toAddress, amount) {
+      try {
+        const valueWei = web3.utils.toWei(amount.toString(), 'ether');
+        const gasPrice = await web3.eth.getGasPrice();
+        const gasLimit = 21000;
+        const gasFeeWei = BigInt(gasPrice) * BigInt(gasLimit);
+        const gasFeeEth = web3.utils.fromWei(gasFeeWei.toString(), 'ether');
+        
+        return {
+          gasPrice: web3.utils.fromWei(gasPrice, 'gwei'),
+          gasLimit,
+          gasFee: gasFeeEth,
+          total: (Number.parseFloat(amount) + Number.parseFloat(gasFeeEth)).toFixed(6)
+        };
+      } catch (err) {
+        throw new Error('Không thể tính gas fee: ' + err.message);
+      }
+    }
+
+    // Gửi giao dịch (hỗ trợ cả dev account và encrypted account)
     async function sendTransaction(fromAddress, toAddress, amount, password) {
       try {
         const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
@@ -246,42 +452,67 @@
         
         if (!account) throw new Error('Không tìm thấy tài khoản!');
 
-        let decrypted;
-        try {
-          decrypted = web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
-        } catch {
-          throw new Error('Mật khẩu không đúng!');
-        }
-
         const valueWei = web3.utils.toWei(amount.toString(), 'ether');
         const balance = await web3.eth.getBalance(fromAddress);
+        const gasPrice = await web3.eth.getGasPrice();
+        const gasLimit = 21000;
+        const gasFeeWei = BigInt(gasPrice) * BigInt(gasLimit);
+        const totalWei = BigInt(valueWei) + gasFeeWei;
         
-        if (BigInt(balance) < BigInt(valueWei)) {
-          throw new Error(`Số dư không đủ (có ${web3.utils.fromWei(balance, 'ether')} ETH)`);
+        if (BigInt(balance) < totalWei) {
+          throw new Error(`Số dư không đủ (cần ${web3.utils.fromWei(totalWei.toString(), 'ether')} ETH, có ${web3.utils.fromWei(balance, 'ether')} ETH)`);
         }
 
-        const gasPrice = await web3.eth.getGasPrice();
-        const tx = {
-          from: fromAddress,
-          to: toAddress,
-          value: valueWei,
-          gas: 21000,
-          gasPrice: gasPrice
-        };
+        let receipt;
 
-        const signedTx = await web3.eth.accounts.signTransaction(tx, decrypted.privateKey);
-        const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+        // Nếu là dev account thì gửi trực tiếp qua Geth
+        if (account.type === 'dev') {
+          const tx = {
+            from: fromAddress,
+            to: toAddress,
+            value: valueWei,
+            gas: gasLimit,
+            gasPrice: gasPrice
+          };
+
+          receipt = await web3.eth.sendTransaction(tx);
+        } else {
+          // Account thường cần decrypt
+          let decrypted;
+          try {
+            decrypted = web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
+          } catch {
+            throw new Error('Mật khẩu không đúng!');
+          }
+
+          const tx = {
+            from: fromAddress,
+            to: toAddress,
+            value: valueWei,
+            gas: gasLimit,
+            gasPrice: gasPrice
+          };
+
+          const signedTx = await web3.eth.accounts.signTransaction(tx, decrypted.privateKey);
+          receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+        }
 
         logToBackend('TRANSACTION_SENT', {
           hash: receipt.transactionHash,
           from: fromAddress,
           to: toAddress,
           value: amount,
+          gasUsed: receipt.gasUsed,
+          gasPrice: web3.utils.fromWei(gasPrice, 'gwei'),
           blockNumber: receipt.blockNumber,
           timestamp: new Date().toISOString()
         });
 
-        return receipt;
+        return {
+          ...receipt,
+          gasFee: web3.utils.fromWei(gasFeeWei.toString(), 'ether'),
+          gasPrice: web3.utils.fromWei(gasPrice, 'gwei')
+        };
       } catch (err) {
         throw new Error('Lỗi gửi giao dịch: ' + err.message);
       }
@@ -323,7 +554,10 @@
               <input type="password" id="confirmPassword" placeholder="Xác nhận mật khẩu" />
               <button onclick="handleRegister()">✨ Tạo tài khoản</button>
               <div style="text-align: center; margin: 10px 0; color: #6B7280;">hoặc</div>
-              <button class="success" onclick="handleTestAccount()">🎁 Tạo test account (100 ETH)</button>
+              <div class="grid-2">
+                <button class="success" onclick="handleImportDevAccount()">🔥 Import Dev Account</button>
+                <button class="success" onclick="handleTestAccount()">🎁 Tạo Test Account</button>
+              </div>
             </div>
           ` : `
             <div>
@@ -346,7 +580,12 @@
           <div class="header">
             <div>
               <h1>💼 Ví của bạn</h1>
-              <div class="address">${currentAccount}</div>
+              <div class="address" style="display: flex; align-items: center;">
+                <span>${currentAccount}</span>
+                <button class="copy-btn" onclick="copyToClipboard('${currentAccount}', this)" title="Copy address">
+                  📋
+                </button>
+              </div>
             </div>
             <div style="text-align: right;">
               <div class="balance-display" id="currentBalance">0 ETH</div>
@@ -360,6 +599,9 @@
         <div class="tabs">
           <button class="tab ${activeTab === 'balance' ? 'active' : ''}" onclick="switchTab('balance')">
             💰 Số dư
+          </button>
+          <button class="tab ${activeTab === 'chart' ? 'active' : ''}" onclick="switchTab('chart')">
+            📈 Biểu đồ
           </button>
           <button class="tab ${activeTab === 'transfer' ? 'active' : ''}" onclick="switchTab('transfer')">
             💸 Chuyển tiền
@@ -385,13 +627,38 @@
       `;
     }
 
+    function renderChartTab() {
+      return `
+        <h2>📈 Biểu đồ số dư theo thời gian</h2>
+        <p style="color: #6B7280; font-size: 13px; margin-bottom: 15px;">
+          Theo dõi sự thay đổi số dư của ví ${currentAccount.slice(0, 10)}...
+        </p>
+        <div class="chart-container">
+          <canvas id="balanceChart"></canvas>
+        </div>
+        <div style="margin-top: 20px; text-align: center;">
+          <button onclick="refreshChart()" style="width: auto; padding: 10px 20px;">
+            🔄 Làm mới biểu đồ
+          </button>
+        </div>
+      `;
+    }
+
     function renderTransferTab() {
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
+      
       return `
         <h2>💸 Chuyển tiền</h2>
+        ${isDevAccount ? '<p style="color: #0D9488; font-size: 13px; margin-bottom: 10px;">🔥 Dev Account - Không cần mật khẩu</p>' : ''}
         <input type="text" value="${currentAccount}" disabled />
-        <input type="text" id="transferTo" placeholder="Địa chỉ nhận (0x...)" />
-        <input type="number" id="transferAmount" placeholder="Số ETH" step="0.001" />
-        <input type="password" id="transferPassword" placeholder="Mật khẩu ví" />
+        <input type="text" id="transferTo" placeholder="Địa chỉ nhận (0x...)" oninput="calculateGasFee()" />
+        <input type="number" id="transferAmount" placeholder="Số ETH" step="0.001" oninput="calculateGasFee()" />
+        
+        <div id="gasFeeDisplay"></div>
+        
+        ${isDevAccount ? '' : '<input type="password" id="transferPassword" placeholder="Mật khẩu ví" />'}
         <button onclick="handleTransfer()">🚀 Gửi giao dịch</button>
         <div id="transferMessage"></div>
       `;
@@ -400,41 +667,51 @@
     function renderHistoryTab() {
       const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
       
-      if (history.length === 0) {
-        return '<h2>📜 Lịch sử giao dịch</h2><p style="text-align: center; color: #6B7280; padding: 40px;">Chưa có giao dịch nào</p>';
-      }
-
       return `
         <h2>📜 Lịch sử giao dịch</h2>
-        <div style="overflow-x: auto;">
-          <table>
-            <thead>
-              <tr>
-                <th>Thời gian</th>
-                <th>Từ</th>
-                <th>Đến</th>
-                <th style="text-align: right;">Số tiền</th>
-                <th style="text-align: center;">Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${history.map(tx => `
-                <tr>
-                  <td>${new Date(tx.timestamp).toLocaleString('vi-VN')}</td>
-                  <td class="address">${tx.from.slice(0, 10)}...</td>
-                  <td class="address">${tx.to.slice(0, 10)}...</td>
-                  <td style="text-align: right; font-weight: bold;">${tx.value} ETH</td>
-                  <td style="text-align: center;">
-                    <span class="status-badge ${tx.status === 'success' ? 'status-success' : 'status-failed'}">
-                      ${tx.status === 'success' ? '✓' : '✗'}
-                    </span>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+        <p style="color: #6B7280; font-size: 13px; margin-bottom: 15px;">💡 Click vào bất kỳ giao dịch nào để xem chi tiết</p>
+        
+        <div class="search-box">
+          <input type="text" id="searchTx" placeholder="Tìm kiếm theo hash hoặc address..." />
+          <button onclick="searchTransaction()">🔍 Tìm</button>
         </div>
+        
+        ${history.length === 0 ? 
+          '<p style="text-align: center; color: #6B7280; padding: 40px;">Chưa có giao dịch nào</p>' :
+          `<div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Thời gian</th>
+                  <th>Từ</th>
+                  <th>Đến</th>
+                  <th style="text-align: right;">Số tiền</th>
+                  <th style="text-align: center;">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                ${renderHistoryRows(history)}
+              </tbody>
+            </table>
+          </div>`
+        }
       `;
+    }
+
+    function renderHistoryRows(history) {
+      return history.map(tx => `
+        <tr onclick='showTransactionDetail(${JSON.stringify(tx).replaceAll(/'/g, "&apos;")})' style="cursor: pointer;">
+          <td>${new Date(tx.timestamp).toLocaleString('vi-VN')}</td>
+          <td class="address">${tx.from.slice(0, 10)}...</td>
+          <td class="address">${tx.to.slice(0, 10)}...</td>
+          <td style="text-align: right; font-weight: bold;">${tx.value} ETH</td>
+          <td style="text-align: center;">
+            <span class="status-badge ${tx.status === 'success' ? 'status-success' : 'status-failed'}">
+              ${tx.status === 'success' ? '✓' : '✗'}
+            </span>
+          </td>
+        </tr>
+      `).join('');
     }
 
     function renderLogsTab() {
@@ -460,6 +737,90 @@
       `;
     }
 
+    // === MODAL FUNCTIONS ===
+    function showTransactionDetail(tx) {
+      const modal = document.getElementById('txDetailModal');
+      const modalBody = document.getElementById('modalBody');
+      
+      modalBody.innerHTML = `
+        <div class="detail-row">
+          <span class="detail-label">🔗 Transaction Hash:</span>
+          <span class="detail-value" style="display: flex; align-items: center; justify-content: flex-end;">
+            <span style="word-break: break-all; margin-right: 8px;">${tx.hash ? tx.hash : 'N/A'}</span>
+            ${tx.hash ? `<button class="copy-btn" onclick="event.stopPropagation(); copyToClipboard('${tx.hash}', this)" title="Copy hash">📋</button>` : ''}
+          </span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">📤 Từ:</span>
+          <span class="detail-value" style="word-break: break-all;">${tx.from}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">📥 Đến:</span>
+          <span class="detail-value" style="word-break: break-all;">${tx.to}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">💰 Số tiền:</span>
+          <span class="detail-value" style="color: #4B5EAA; font-weight: bold;">${tx.value} ETH</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">⛽ Gas Fee:</span>
+          <span class="detail-value">${tx.gasFee || 'N/A'} ETH</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">⚡ Gas Price:</span>
+          <span class="detail-value">${tx.gasPrice || 'N/A'} Gwei</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">📦 Block Number:</span>
+          <span class="detail-value">${tx.blockNumber || 'N/A'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">🕒 Thời gian:</span>
+          <span class="detail-value">${new Date(tx.timestamp).toLocaleString('vi-VN')}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">✅ Trạng thái:</span>
+          <span class="detail-value">
+            <span class="status-badge ${tx.status === 'success' ? 'status-success' : 'status-failed'}">
+              ${tx.status === 'success' ? '✓ Thành công' : '✗ Thất bại'}
+            </span>
+          </span>
+        </div>
+      `;
+      
+      modal.classList.add('show');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('txDetailModal');
+      modal.classList.remove('show');
+    }
+
+    // Copy to clipboard
+    function copyToClipboard(text, button) {
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = button.innerHTML;
+        button.innerHTML = '✓';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+          button.innerHTML = originalText;
+          button.classList.remove('copied');
+        }, 2000);
+      }).catch(err => {
+        console.error('Copy failed:', err);
+        alert('Không thể copy: ' + err.message);
+      });
+    }
+
+    // Đóng modal khi click bên ngoài
+    globalThis.onclick = function(event) {
+      const modal = document.getElementById('txDetailModal');
+      if (event.target === modal) {
+        closeModal();
+      }
+    }
+
     // === EVENT HANDLERS ===
     function switchAuthMode(mode) {
       localStorage.setItem('authMode', mode);
@@ -471,9 +832,188 @@
       const content = document.getElementById('tabContent');
       
       if (tab === 'balance') content.innerHTML = renderBalanceTab();
+      else if (tab === 'chart') {
+        content.innerHTML = renderChartTab();
+        setTimeout(() => renderBalanceChart(), 100);
+      }
       else if (tab === 'transfer') content.innerHTML = renderTransferTab();
       else if (tab === 'history') content.innerHTML = renderHistoryTab();
       else if (tab === 'logs') content.innerHTML = renderLogsTab();
+    }
+
+    // Render biểu đồ số dư
+    let balanceChartInstance = null;
+    
+    function renderBalanceChart() {
+      const canvas = document.getElementById('balanceChart');
+      if (!canvas) return;
+      
+      const history = getBalanceHistory(currentAccount);
+      
+      if (history.length === 0) {
+        canvas.parentElement.innerHTML = '<p style="text-align: center; color: #6B7280; padding: 40px;">Chưa có dữ liệu số dư. Dữ liệu sẽ được thu thập theo thời gian.</p>';
+        return;
+      }
+
+      // Destroy old chart
+      if (balanceChartInstance) {
+        balanceChartInstance.destroy();
+      }
+
+      const ctx = canvas.getContext('2d');
+      
+      const labels = history.map(item => {
+        const date = new Date(item.timestamp);
+        return date.toLocaleString('vi-VN', { 
+          month: 'short', 
+          day: 'numeric', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+      });
+      
+      const data = history.map(item => item.balance);
+
+      balanceChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Số dư (ETH)',
+            data: data,
+            borderColor: '#4B5EAA',
+            backgroundColor: 'rgba(75, 94, 170, 0.1)',
+            borderWidth: 3,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#4B5EAA',
+            pointBorderColor: '#FFFFFF',
+            pointBorderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                font: { size: 14, weight: 'bold' },
+                color: '#1F2937'
+              }
+            },
+            tooltip: {
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              titleColor: '#FFFFFF',
+              bodyColor: '#FFFFFF',
+              padding: 12,
+              cornerRadius: 8,
+              displayColors: false,
+              callbacks: {
+                label: function(context) {
+                  return 'Số dư: ' + context.parsed.y.toFixed(6) + ' ETH';
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: false,
+              ticks: {
+                callback: function(value) {
+                  return value.toFixed(4) + ' ETH';
+                },
+                color: '#6B7280',
+                font: { size: 12 }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)'
+              }
+            },
+            x: {
+              ticks: {
+                maxRotation: 45,
+                minRotation: 45,
+                color: '#6B7280',
+                font: { size: 11 }
+              },
+              grid: {
+                display: false
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function refreshChart() {
+      renderBalanceChart();
+    }
+
+    // Tính toán gas fee khi nhập
+    async function calculateGasFee() {
+      const to = document.getElementById('transferTo').value;
+      const amount = document.getElementById('transferAmount').value;
+      const displayEl = document.getElementById('gasFeeDisplay');
+
+      if (!to || !amount || amount <= 0) {
+        displayEl.innerHTML = '';
+        return;
+      }
+
+      try {
+        const gasInfo = await estimateGasFee(currentAccount, to, amount);
+        displayEl.innerHTML = `
+          <div class="gas-fee-box">
+            <div style="font-weight: bold; margin-bottom: 10px; color: #1F2937;">⛽ Chi phí giao dịch</div>
+            <div class="gas-fee-row">
+              <span>Gas Price:</span>
+              <span>${Number.parseFloat(gasInfo.gasPrice).toFixed(2)} Gwei</span>
+            </div>
+            <div class="gas-fee-row">
+              <span>Gas Limit:</span>
+              <span>${gasInfo.gasLimit}</span>
+            </div>
+            <div class="gas-fee-row">
+              <span>Gas Fee:</span>
+              <span>${Number.parseFloat(gasInfo.gasFee).toFixed(6)} ETH</span>
+            </div>
+            <div class="gas-fee-row total">
+              <span>Tổng cộng:</span>
+              <span>${gasInfo.total} ETH</span>
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        displayEl.innerHTML = `<div class="message error">❌ ${err.message}</div>`;
+      }
+    }
+
+    // Tìm kiếm giao dịch
+    function searchTransaction() {
+      const searchTerm = document.getElementById('searchTx').value.toLowerCase().trim();
+      const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
+      
+      if (!searchTerm) {
+        document.getElementById('historyTableBody').innerHTML = renderHistoryRows(history);
+        return;
+      }
+
+      const filtered = history.filter(tx => 
+        tx.hash.toLowerCase().includes(searchTerm) ||
+        tx.from.toLowerCase().includes(searchTerm) ||
+        tx.to.toLowerCase().includes(searchTerm)
+      );
+
+      const tbody = document.getElementById('historyTableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #6B7280;">Không tìm thấy giao dịch nào</td></tr>';
+      } else {
+        tbody.innerHTML = renderHistoryRows(filtered);
+      }
     }
 
     async function handleRegister() {
@@ -513,6 +1053,51 @@
           render();
           loadBalance();
         }, 1500);
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+      }
+    }
+
+    async function handleImportDevAccount() {
+      const messageEl = document.getElementById('authMessage');
+      messageEl.innerHTML = '<div class="message info">⏳ Đang import dev account...</div>';
+
+      try {
+        const { address, balance } = await importDevAccount();
+        
+        // Kiểm tra xem đã import chưa
+        const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+        const existing = accounts.find(a => a.address.toLowerCase() === address.toLowerCase());
+        
+        if (existing) {
+          messageEl.innerHTML = `<div class="message info">ℹ️ Dev account đã tồn tại!<br>📍 ${address}<br>💰 Số dư: ${balance} ETH</div>`;
+          
+          setTimeout(() => {
+            currentAccount = address;
+            localStorage.setItem('currentAccount', address);
+            currentPage = 'dashboard';
+            render();
+            loadBalance();
+          }, 2000);
+          return;
+        }
+        
+        accounts.push({
+          address,
+          type: 'dev',
+          createdAt: new Date().toISOString()
+        });
+        localStorage.setItem('walletAccounts', JSON.stringify(accounts));
+
+        messageEl.innerHTML = `<div class="message success">✅ Import thành công!<br>📍 ${address}<br>💰 Số dư: ${balance} ETH<br>🔑 Không cần mật khẩu (quản lý bởi Geth)</div>`;
+        
+        setTimeout(() => {
+          currentAccount = address;
+          localStorage.setItem('currentAccount', address);
+          currentPage = 'dashboard';
+          render();
+          loadBalance();
+        }, 2000);
       } catch (err) {
         messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
       }
@@ -605,6 +1190,9 @@
         if (balanceEl) {
           balanceEl.textContent = Number.parseFloat(balance).toFixed(4) + ' ETH';
         }
+        
+        // Lưu lịch sử số dư
+        saveBalanceHistory(currentAccount, balance);
       } catch (err) {
         console.error('Lỗi load balance:', err);
       }
@@ -632,11 +1220,21 @@
     async function handleTransfer() {
       const to = document.getElementById('transferTo').value;
       const amount = document.getElementById('transferAmount').value;
-      const password = document.getElementById('transferPassword').value;
+      const passwordInput = document.getElementById('transferPassword');
+      const password = passwordInput ? passwordInput.value : '';
       const messageEl = document.getElementById('transferMessage');
 
-      if (!to || !amount || !password) {
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
+
+      if (!to || !amount) {
         messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập đầy đủ thông tin</div>';
+        return;
+      }
+
+      if (!isDevAccount && !password) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập mật khẩu</div>';
         return;
       }
 
@@ -653,16 +1251,28 @@
           to,
           value: amount,
           blockNumber: receipt.blockNumber,
+          gasFee: receipt.gasFee,
+          gasPrice: receipt.gasPrice,
           status: receipt.status ? 'success' : 'failed',
           timestamp: new Date().toISOString()
         });
         localStorage.setItem('txHistory', JSON.stringify(history));
 
-        messageEl.innerHTML = `<div class="message success">✅ Thành công!<br><small>Hash: ${receipt.transactionHash}</small></div>`;
+        messageEl.innerHTML = `
+          <div class="message success">
+            ✅ Thành công!<br>
+            <small>Hash: ${receipt.transactionHash}</small><br>
+            <button onclick='showTransactionDetail(${JSON.stringify(history[0]).replaceAll(/'/g, "&apos;")})' 
+                    style="margin-top: 10px; width: auto; padding: 8px 16px;">
+              🔍 Xem chi tiết
+            </button>
+          </div>
+        `;
         
         document.getElementById('transferTo').value = '';
         document.getElementById('transferAmount').value = '';
-        document.getElementById('transferPassword').value = '';
+        if (passwordInput) passwordInput.value = '';
+        document.getElementById('gasFeeDisplay').innerHTML = '';
         
         loadBalance();
       } catch (err) {
