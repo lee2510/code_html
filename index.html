@@ -92,6 +92,32 @@
       font-weight: bold; 
       color: #4B5EAA;
       text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .balance-toggle {
+      background: #E5E7EB;
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+      padding: 0;
+      margin: 0;
+    }
+    .balance-toggle:hover {
+      background: #D1D5DB;
+      transform: scale(1.05);
+    }
+    .balance-hidden {
+      letter-spacing: 4px;
+      font-size: 28px;
     }
     .address { 
       font-family: 'Courier New', monospace; 
@@ -275,14 +301,17 @@
     let web3;
     let currentAccount = null;
     let currentPage = 'login';
+    let balanceVisible = true;
 
+    // ==================== STORAGE FUNCTIONS ====================
+    
     // Lưu lịch sử số dư
     function saveBalanceHistory(address, balance) {
       const historyKey = `balanceHistory_${address}`;
       let history = JSON.parse(localStorage.getItem(historyKey) || '[]');
       
       const now = new Date().toISOString();
-      const lastEntry = history.atat(history.length - 11);
+      const lastEntry = history.at(history.length - 1);
       
       // Chỉ lưu nếu số dư thay đổi hoặc đã qua 1 phút
       if (!lastEntry || 
@@ -308,6 +337,62 @@
       return JSON.parse(localStorage.getItem(historyKey) || '[]');
     }
 
+    // Lưu số dư hiện tại
+    function saveCurrentBalance(address, balance) {
+      const balanceKey = `savedBalance_${address}`;
+      localStorage.setItem(balanceKey, balance);
+    }
+
+    // Lấy số dư đã lưu
+    function getSavedBalance(address) {
+      const balanceKey = `savedBalance_${address}`;
+      return localStorage.getItem(balanceKey);
+    }
+
+    // Khôi phục số dư nếu bị reset
+    async function restoreBalanceIfNeeded(address) {
+      try {
+        const currentBalance = await getBalance(address);
+        const savedBalance = getSavedBalance(address);
+        
+        // Nếu số dư hiện tại = 0 nhưng đã từng có số dư > 0
+        if (savedBalance && parseFloat(savedBalance) > 0 && parseFloat(currentBalance) === 0) {
+          console.log(`🔄 Phát hiện số dư bị reset. Đang khôi phục ${savedBalance} ETH...`);
+          
+          // Lấy dev account để fund
+          const accounts = await web3.eth.getAccounts();
+          if (accounts && accounts.length > 0) {
+            const devAddress = accounts[0];
+            
+            // Chuyển tiền từ dev account
+            await web3.eth.sendTransaction({
+              from: devAddress,
+              to: address,
+              value: web3.utils.toWei(savedBalance, 'ether'),
+              gas: 21000
+            });
+            
+            console.log(`✅ Đã khôi phục ${savedBalance} ETH cho ${address}`);
+            
+            logToBackend('BALANCE_RESTORED', {
+              address: address,
+              amount: savedBalance + ' ETH',
+              timestamp: new Date().toISOString()
+            });
+            
+            return true;
+          }
+        }
+        
+        return false;
+      } catch (err) {
+        console.error('Lỗi khôi phục số dư:', err);
+        return false;
+      }
+    }
+
+    // ==================== WEB3 FUNCTIONS ====================
+    
     // Khởi tạo Web3
     async function initWeb3() {
       try {
@@ -374,43 +459,6 @@
         };
       } catch (err) {
         throw new Error('Lỗi import dev account: ' + err.message);
-      }
-    }
-
-    // Tạo test account với 100 ETH
-    async function createTestAccount() {
-      try {
-        const accounts = await web3.eth.getAccounts();
-        if (!accounts || accounts.length === 0) {
-          throw new Error('Không có account Geth! Chạy: geth --dev --http --http.api eth,net,web3');
-        }
-
-        const newAccount = web3.eth.accounts.create();
-        const password = '123456';
-        const encrypted = web3.eth.accounts.encrypt(newAccount.privateKey, password);
-
-        // Chuyển 100 ETH từ account Geth mặc định
-        const txHash = await web3.eth.sendTransaction({
-          from: accounts[0],
-          to: newAccount.address,
-          value: web3.utils.toWei('100', 'ether'),
-          gas: 21000
-        });
-
-        logToBackend('TEST_ACCOUNT_CREATED', {
-          address: newAccount.address,
-          fundedWith: '100 ETH',
-          txHash: txHash.transactionHash,
-          timestamp: new Date().toISOString()
-        });
-
-        return { 
-          address: newAccount.address, 
-          encrypted: JSON.stringify(encrypted),
-          password 
-        };
-      } catch (err) {
-        throw new Error('Lỗi tạo test account: ' + err.message);
       }
     }
 
@@ -518,7 +566,8 @@
       }
     }
 
-    // === UI RENDERING ===
+    // ==================== UI RENDERING ====================
+    
     function render() {
       const app = document.getElementById('app');
       
@@ -554,10 +603,7 @@
               <input type="password" id="confirmPassword" placeholder="Xác nhận mật khẩu" />
               <button onclick="handleRegister()">✨ Tạo tài khoản</button>
               <div style="text-align: center; margin: 10px 0; color: #6B7280;">hoặc</div>
-              <div class="grid-2">
-                <button class="success" onclick="handleImportDevAccount()">🔥 Import Dev Account</button>
-                <button class="success" onclick="handleTestAccount()">🎁 Tạo Test Account</button>
-              </div>
+              <button class="success" onclick="handleImportDevAccount()">🔥 Import Dev Account</button>
             </div>
           ` : `
             <div>
@@ -588,7 +634,12 @@
               </div>
             </div>
             <div style="text-align: right;">
-              <div class="balance-display" id="currentBalance">0 ETH</div>
+              <div class="balance-display">
+                <button class="balance-toggle" onclick="toggleBalanceVisibility()" title="Ẩn/Hiện số dư">
+                  👁️
+                </button>
+                <span id="currentBalance">0 ETH</span>
+              </div>
               <button class="danger" onclick="handleLogout()" style="width: auto; margin-top: 10px;">
                 🚪 Đăng xuất
               </button>
@@ -633,12 +684,16 @@
         <p style="color: #6B7280; font-size: 13px; margin-bottom: 15px;">
           Theo dõi sự thay đổi số dư của ví ${currentAccount.slice(0, 10)}...
         </p>
+        <div id="chartLoadingMessage"></div>
         <div class="chart-container">
           <canvas id="balanceChart"></canvas>
         </div>
         <div style="margin-top: 20px; text-align: center;">
           <button onclick="refreshChart()" style="width: auto; padding: 10px 20px;">
             🔄 Làm mới biểu đồ
+          </button>
+          <button onclick="clearChartHistory()" style="width: auto; padding: 10px 20px; margin-left: 10px;" class="danger">
+            🗑️ Xóa lịch sử
           </button>
         </div>
       `;
@@ -737,7 +792,8 @@
       `;
     }
 
-    // === MODAL FUNCTIONS ===
+    // ==================== MODAL FUNCTIONS ====================
+    
     function showTransactionDetail(tx) {
       const modal = document.getElementById('txDetailModal');
       const modalBody = document.getElementById('modalBody');
@@ -775,7 +831,7 @@
           <span class="detail-value">${tx.blockNumber || 'N/A'}</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">🕒 Thời gian:</span>
+          <span class="detail-label">🕐 Thời gian:</span>
           <span class="detail-value">${new Date(tx.timestamp).toLocaleString('vi-VN')}</span>
         </div>
         <div class="detail-row">
@@ -814,14 +870,36 @@
     }
 
     // Đóng modal khi click bên ngoài
-    globalThis.onclick = function(event) {
+    window.onclick = function(event) {
       const modal = document.getElementById('txDetailModal');
       if (event.target === modal) {
         closeModal();
       }
     }
 
-    // === EVENT HANDLERS ===
+    // Toggle balance visibility
+    function toggleBalanceVisibility() {
+      balanceVisible = !balanceVisible;
+      updateBalanceDisplay();
+    }
+
+    function updateBalanceDisplay() {
+      const balanceEl = document.getElementById('currentBalance');
+      if (!balanceEl) return;
+      
+      const actualBalance = balanceEl.getAttribute('data-balance') || '0.000000';
+      
+      if (balanceVisible) {
+        balanceEl.textContent = actualBalance + ' ETH';
+        balanceEl.classList.remove('balance-hidden');
+      } else {
+        balanceEl.textContent = '••••••';
+        balanceEl.classList.add('balance-hidden');
+      }
+    }
+
+    // ==================== EVENT HANDLERS ====================
+    
     function switchAuthMode(mode) {
       localStorage.setItem('authMode', mode);
       render();
@@ -841,18 +919,38 @@
       else if (tab === 'logs') content.innerHTML = renderLogsTab();
     }
 
-    // Render biểu đồ số dư
+    // ==================== CHART FUNCTIONS ====================
+    
     let balanceChartInstance = null;
     
-    function renderBalanceChart() {
+    async function renderBalanceChart() {
       const canvas = document.getElementById('balanceChart');
+      const messageEl = document.getElementById('chartLoadingMessage');
       if (!canvas) return;
       
       const history = getBalanceHistory(currentAccount);
       
       if (history.length === 0) {
-        canvas.parentElement.innerHTML = '<p style="text-align: center; color: #6B7280; padding: 40px;">Chưa có dữ liệu số dư. Dữ liệu sẽ được thu thập theo thời gian.</p>';
-        return;
+        if (messageEl) {
+          messageEl.innerHTML = '<div class="message info">⏳ Đang khởi tạo dữ liệu biểu đồ...</div>';
+        }
+        
+        // Tự động lưu điểm dữ liệu đầu tiên
+        try {
+          const balance = await getBalance(currentAccount);
+          saveBalanceHistory(currentAccount, balance);
+          
+          // Render lại sau khi lưu
+          setTimeout(() => renderBalanceChart(), 500);
+          return;
+        } catch (err) {
+          canvas.parentElement.innerHTML = '<p style="text-align: center; color: #DC2626; padding: 40px;">❌ Lỗi tải dữ liệu: ' + err.message + '</p>';
+          return;
+        }
+      }
+
+      if (messageEl) {
+        messageEl.innerHTML = '';
       }
 
       // Destroy old chart
@@ -949,10 +1047,22 @@
       });
     }
 
-    function refreshChart() {
+    async function refreshChart() {
+      const balance = await getBalance(currentAccount);
+      saveBalanceHistory(currentAccount, balance);
       renderBalanceChart();
     }
 
+    function clearChartHistory() {
+      if (confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử biểu đồ?')) {
+        const historyKey = `balanceHistory_${currentAccount}`;
+        localStorage.removeItem(historyKey);
+        renderBalanceChart();
+      }
+    }
+
+    // ==================== TRANSACTION FUNCTIONS ====================
+    
     // Tính toán gas fee khi nhập
     async function calculateGasFee() {
       const to = document.getElementById('transferTo').value;
@@ -1016,6 +1126,8 @@
       }
     }
 
+    // ==================== AUTH HANDLERS ====================
+    
     async function handleRegister() {
       const password = document.getElementById('password').value;
       const confirmPassword = document.getElementById('confirmPassword').value;
@@ -1089,37 +1201,7 @@
         });
         localStorage.setItem('walletAccounts', JSON.stringify(accounts));
 
-        messageEl.innerHTML = `<div class="message success">✅ Import thành công!<br>📍 ${address}<br>💰 Số dư: ${balance} ETH<br>🔑 Không cần mật khẩu (quản lý bởi Geth)</div>`;
-        
-        setTimeout(() => {
-          currentAccount = address;
-          localStorage.setItem('currentAccount', address);
-          currentPage = 'dashboard';
-          render();
-          loadBalance();
-        }, 2000);
-      } catch (err) {
-        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
-      }
-    }
-
-    async function handleTestAccount() {
-      const messageEl = document.getElementById('authMessage');
-      messageEl.innerHTML = '<div class="message info">⏳ Đang tạo test account...</div>';
-
-      try {
-        const { address, encrypted } = await createTestAccount();
-        
-        const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
-        accounts.push({
-          address,
-          encrypted,
-          createdAt: new Date().toISOString(),
-          type: 'test'
-        });
-        localStorage.setItem('walletAccounts', JSON.stringify(accounts));
-
-        messageEl.innerHTML = `<div class="message success">✅ Test account: ${address}<br>💰 Số dư: 100 ETH<br>🔑 Mật khẩu: 123456</div>`;
+        messageEl.innerHTML = `<div class="message success">✅ Import thành công!<br>📍 ${address}<br>💰 Số dư: ${balance} ETH<br>🔓 Không cần mật khẩu (quản lý bởi Geth)</div>`;
         
         setTimeout(() => {
           currentAccount = address;
@@ -1154,8 +1236,11 @@
           return;
         }
 
-        // Verify password
-        web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
+        // Dev account không cần verify password
+        if (account.type !== 'dev') {
+          // Verify password cho user account
+          web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
+        }
         
         logToBackend('LOGIN_SUCCESS', { address });
         messageEl.innerHTML = '<div class="message success">✅ Đăng nhập thành công!</div>';
@@ -1185,11 +1270,31 @@
       if (!currentAccount) return;
       
       try {
+        // Kiểm tra và khôi phục số dư nếu cần
+        const restored = await restoreBalanceIfNeeded(currentAccount);
+        if (restored) {
+          // Đợi một chút để transaction được confirm
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
         const balance = await getBalance(currentAccount);
         const balanceEl = document.getElementById('currentBalance');
         if (balanceEl) {
-          balanceEl.textContent = Number.parseFloat(balance).toFixed(4) + ' ETH';
+          // Lưu số dư gốc chính xác (6 chữ số thập phân)
+          const formattedBalance = Number.parseFloat(balance).toFixed(6);
+          balanceEl.setAttribute('data-balance', formattedBalance);
+          
+          if (balanceVisible) {
+            balanceEl.textContent = formattedBalance + ' ETH';
+            balanceEl.classList.remove('balance-hidden');
+          } else {
+            balanceEl.textContent = '••••••';
+            balanceEl.classList.add('balance-hidden');
+          }
         }
+        
+        // Lưu số dư hiện tại
+        saveCurrentBalance(currentAccount, balance);
         
         // Lưu lịch sử số dư
         saveBalanceHistory(currentAccount, balance);
@@ -1274,13 +1379,20 @@
         if (passwordInput) passwordInput.value = '';
         document.getElementById('gasFeeDisplay').innerHTML = '';
         
-        loadBalance();
+        // Load balance và cập nhật biểu đồ
+        await loadBalance();
+        
+        // Nếu đang ở tab biểu đồ thì refresh
+        if (localStorage.getItem('dashboardTab') === 'chart') {
+          setTimeout(() => refreshChart(), 1000);
+        }
       } catch (err) {
         messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
       }
     }
 
-    // === INITIALIZATION ===
+    // ==================== INITIALIZATION ====================
+    
     async function init() {
       const connected = await initWeb3();
       
