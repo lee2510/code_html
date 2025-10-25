@@ -130,7 +130,7 @@
     .message.warning { background: #FEF3C7; color: #92400E; border-left: 4px solid #F59E0B; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th { background: var(--table-header); padding: 12px; text-align: left; font-weight: 600; color: var(--text-primary); }
-    td { padding: 12px; border-bottom: 1px solid var(--table-border); font-size: 13px; color: var(--text-secondary); }
+    td { padding: 12px; border-bottom: 1px solid var(--table-border); font-size: 14px; color: var(--text-secondary); }
     tr:hover { background: var(--table-hover); }
     .header { 
       display: flex; 
@@ -141,8 +141,8 @@
       gap: 15px;
     }
     .balance-display { 
-      font-size: 32px; 
-      font-weight: bold; 
+      font-size: 24px; 
+      font-weight: 600; 
       color: #4B5EAA;
       text-shadow: 1px 1px 2px var(--shadow);
       display: flex;
@@ -173,14 +173,25 @@
       transform: scale(1.05);
     }
     .balance-hidden {
-      letter-spacing: 4px;
-      font-size: 28px;
+      letter-spacing: 3px;
+      font-size: 20px;
     }
     .address { 
       font-family: 'Courier New', monospace; 
-      font-size: 12px; 
+      font-size: 13px; 
       color: var(--text-secondary);
       word-break: break-all;
+    }
+    .address-clickable {
+      cursor: pointer;
+      transition: all 0.3s;
+      padding: 8px 12px;
+      border-radius: 8px;
+      display: inline-block;
+    }
+    .address-clickable:hover {
+      background: var(--table-header);
+      transform: translateX(5px);
     }
     .log-entry { 
       background: var(--table-header); 
@@ -224,6 +235,7 @@
       animation: fadeIn 0.3s;
     }
     .modal.show { display: flex; align-items: center; justify-content: center; }
+    #txDetailModal { z-index: 1001; }
     .modal-content {
       background: var(--bg-card);
       border-radius: 16px;
@@ -447,9 +459,20 @@
     <div class="modal-content">
       <div class="modal-header">
         <h2>📋 Chi tiết giao dịch</h2>
-        <button class="modal-close" onclick="closeModal()">✕</button>
+        <button class="modal-close" onclick="closeModal('txDetailModal')">✕</button>
       </div>
       <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- Modal thông tin ví -->
+  <div id="walletInfoModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h2>💼 Thông tin ví</h2>
+        <button class="modal-close" onclick="closeModal('walletInfoModal')">✕</button>
+      </div>
+      <div id="walletInfoBody"></div>
     </div>
   </div>
 
@@ -875,21 +898,18 @@
     }
 
     function renderDashboard() {
-      const activeTab = localStorage.getItem('dashboardTab') || 'balance';
+      const activeTab = localStorage.getItem('dashboardTab') || 'chart';
       
       return `
         <div class="card">
           <div class="header">
             <div>
               <h1>💼 Ví của bạn</h1>
-              <div class="address" style="display: flex; align-items: center;">
+              <div class="address address-clickable" onclick="showWalletInfo()" title="Click để xem thông tin chi tiết">
                 <span>${currentAccount}</span>
-                <button class="copy-btn" onclick="copyToClipboard('${currentAccount}', this)" title="Copy address">
+                <button class="copy-btn" onclick="event.stopPropagation(); copyToClipboard('${currentAccount}', this)" title="Copy address">
                   📋
                 </button>
-              </div>
-              <div class="security-badge verified">
-                ✅ Địa chỉ đã xác thực checksum
               </div>
             </div>
             <div style="text-align: right;">
@@ -907,17 +927,14 @@
         </div>
 
         <div class="tabs">
-          <button class="tab ${activeTab === 'balance' ? 'active' : ''}" onclick="switchTab('balance')">
-            💰 Số dư
-          </button>
           <button class="tab ${activeTab === 'chart' ? 'active' : ''}" onclick="switchTab('chart')">
             📈 Biểu đồ
           </button>
           <button class="tab ${activeTab === 'transfer' ? 'active' : ''}" onclick="switchTab('transfer')">
             💸 Chuyển tiền
           </button>
-          <button class="tab ${activeTab === 'history' ? 'active' : ''}" onclick="switchTab('history')">
-            📜 Lịch sử
+          <button class="tab ${activeTab === 'contract' ? 'active' : ''}" onclick="switchTab('contract')">
+            📄 Hợp đồng
           </button>
           <button class="tab ${activeTab === 'logs' ? 'active' : ''}" onclick="switchTab('logs')">
             📊 Logs
@@ -928,12 +945,57 @@
       `;
     }
 
-    function renderBalanceTab() {
+    function renderWalletInfo() {
+      const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
+      const walletHistory = history.filter(tx => 
+        tx.from.toLowerCase() === currentAccount.toLowerCase() || 
+        tx.to.toLowerCase() === currentAccount.toLowerCase()
+      );
+      
       return `
-        <h2>💰 Kiểm tra số dư</h2>
-        <input type="text" id="checkAddress" placeholder="Nhập địa chỉ ví" value="${currentAccount}" />
-        <button onclick="checkBalance()">🔍 Kiểm tra</button>
-        <div id="balanceResult"></div>
+        <div class="detail-row" style="border-bottom: 2px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
+          <span class="detail-label" style="font-size: 16px;">📍 Địa chỉ ví:</span>
+          <span class="detail-value" style="word-break: break-all; font-family: 'Courier New', monospace;">
+            ${currentAccount}
+            <button class="copy-btn" onclick="event.stopPropagation(); copyToClipboard('${currentAccount}', this)" title="Copy address">
+              📋
+            </button>
+          </span>
+        </div>
+        
+        <div class="detail-row" style="border-bottom: 2px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
+          <span class="detail-label" style="font-size: 16px;">💰 Số dư hiện tại:</span>
+          <span class="detail-value" style="font-size: 24px; font-weight: bold; color: #4B5EAA;">
+            ${currentBalanceValue} ETH
+          </span>
+        </div>
+
+        <h3 style="margin: 20px 0 15px 0; color: var(--text-primary);">📜 Lịch sử giao dịch</h3>
+        
+        <div class="search-box" style="margin-bottom: 15px;">
+          <input type="text" id="walletSearchTx" placeholder="Tìm kiếm theo hash hoặc address..." />
+          <button onclick="searchWalletTransaction()">🔍 Tìm</button>
+        </div>
+
+        ${walletHistory.length === 0 ? 
+          '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">Chưa có giao dịch nào</p>' :
+          `<div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Thời gian</th>
+                  <th>Từ</th>
+                  <th>Đến</th>
+                  <th style="text-align: right;">Số tiền</th>
+                  <th style="text-align: center;">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody id="walletHistoryTableBody">
+                ${renderHistoryRows(walletHistory)}
+              </tbody>
+            </table>
+          </div>`
+        }
       `;
     }
 
@@ -982,37 +1044,82 @@
       `;
     }
 
-    function renderHistoryTab() {
-      const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
+    function renderContractTab() {
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
       
       return `
-        <h2>📜 Lịch sử giao dịch</h2>
-        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 15px;">💡 Click vào bất kỳ giao dịch nào để xem chi tiết</p>
+        <h2>📄 Triển khai Hợp đồng Thông minh</h2>
+        ${isDevAccount ? '<p style="color: #0D9488; font-size: 13px; margin-bottom: 10px;">🔥 Dev Account - Không cần mật khẩu</p>' : ''}
         
-        <div class="search-box">
-          <input type="text" id="searchTx" placeholder="Tìm kiếm theo hash hoặc address..." />
-          <button onclick="searchTransaction()">🔍 Tìm</button>
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-primary);">
+            📝 Bytecode hợp đồng:
+          </label>
+          <textarea 
+            id="contractBytecode" 
+            placeholder="0x60806040..."
+            style="width: 100%; min-height: 150px; padding: 12px; border-radius: 8px; border: 2px solid var(--border-color); font-family: 'Courier New', monospace; font-size: 13px; background: var(--bg-input); color: var(--text-primary); resize: vertical;"
+          ></textarea>
+          <small style="color: var(--text-secondary);">Nhập bytecode của hợp đồng đã được biên dịch (bắt đầu bằng 0x)</small>
         </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-primary);">
+            🔧 Constructor Arguments (tùy chọn):
+          </label>
+          <input 
+            type="text" 
+            id="contractArgs" 
+            placeholder='["arg1", "arg2"] hoặc để trống nếu không có'
+            style="font-family: 'Courier New', monospace;"
+          />
+          <small style="color: var(--text-secondary);">Nhập các tham số constructor dưới dạng JSON array</small>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-primary);">
+            💰 Số ETH gửi kèm (tùy chọn):
+          </label>
+          <input 
+            type="number" 
+            id="contractValue" 
+            placeholder="0.0" 
+            step="0.001"
+            oninput="calculateContractGasFee()"
+          />
+          <small style="color: var(--text-secondary);">Để 0 nếu hợp đồng không cần nhận ETH khi deploy</small>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-primary);">
+            ⛽ Gas Limit:
+          </label>
+          <input 
+            type="number" 
+            id="contractGasLimit" 
+            placeholder="3000000" 
+            value="3000000"
+            oninput="calculateContractGasFee()"
+          />
+          <small style="color: var(--text-secondary);">Gas limit cho việc triển khai hợp đồng (mặc định: 3,000,000)</small>
+        </div>
+
+        <div id="contractGasFeeDisplay"></div>
         
-        ${history.length === 0 ? 
-          '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">Chưa có giao dịch nào</p>' :
-          `<div style="overflow-x: auto;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Thời gian</th>
-                  <th>Từ</th>
-                  <th>Đến</th>
-                  <th style="text-align: right;">Số tiền</th>
-                  <th style="text-align: center;">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody id="historyTableBody">
-                ${renderHistoryRows(history)}
-              </tbody>
-            </table>
-          </div>`
-        }
+        ${isDevAccount ? '' : '<input type="password" id="contractPassword" placeholder="Mật khẩu ví" />'}
+        
+        <button onclick="handleDeployContract()" id="deployBtn" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);">
+          🚀 Triển khai Hợp đồng
+        </button>
+        
+        <div id="contractMessage"></div>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid var(--border-color);">
+          <h3 style="margin-bottom: 15px; color: var(--text-primary);">📋 Hợp đồng đã triển khai</h3>
+          <div id="deployedContractsList"></div>
+        </div>
       `;
     }
 
@@ -1020,7 +1127,7 @@
       return history.map(tx => {
         const txJson = JSON.stringify(tx).replaceAll("'", "&#39;").replaceAll('"', "&quot;");
         return `
-          <tr onclick='showTransactionDetail(${txJson})' style="cursor: pointer;">
+          <tr onclick='event.stopPropagation(); showTransactionDetail(${txJson})' style="cursor: pointer;">
             <td>${new Date(tx.timestamp).toLocaleString('vi-VN')}</td>
             <td class="address">${tx.from.slice(0, 10)}...</td>
             <td class="address">${tx.to.slice(0, 10)}...</td>
@@ -1106,61 +1213,130 @@
 
     // ==================== MODAL FUNCTIONS ====================
     
+    function showWalletInfo() {
+      const modal = document.getElementById('walletInfoModal');
+      const modalBody = document.getElementById('walletInfoBody');
+      
+      modalBody.innerHTML = renderWalletInfo();
+      modal.classList.add('show');
+    }
+
+    function searchWalletTransaction() {
+      const searchTerm = document.getElementById('walletSearchTx').value.toLowerCase().trim();
+      const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
+      const walletHistory = history.filter(tx => 
+        tx.from.toLowerCase() === currentAccount.toLowerCase() || 
+        tx.to.toLowerCase() === currentAccount.toLowerCase()
+      );
+      
+      if (!searchTerm) {
+        document.getElementById('walletHistoryTableBody').innerHTML = renderHistoryRows(walletHistory);
+        return;
+      }
+
+      const filtered = walletHistory.filter(tx => 
+        tx.hash.toLowerCase().includes(searchTerm) ||
+        tx.from.toLowerCase().includes(searchTerm) ||
+        tx.to.toLowerCase().includes(searchTerm)
+      );
+
+      const tbody = document.getElementById('walletHistoryTableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: var(--text-secondary);">Không tìm thấy giao dịch nào</td></tr>';
+      } else {
+        tbody.innerHTML = renderHistoryRows(filtered);
+      }
+    }
+    
     function showTransactionDetail(tx) {
+      // KHÔNG đóng modal wallet info, chỉ hiển thị modal chi tiết phía trên
       const modal = document.getElementById('txDetailModal');
       const modalBody = document.getElementById('modalBody');
       
       modalBody.innerHTML = `
-        <div class="detail-row">
-          <span class="detail-label">🔗 Transaction Hash:</span>
-          <span class="detail-value" style="display: flex; align-items: center; justify-content: flex-end;">
-            <span style="word-break: break-all; margin-right: 8px;">${tx.hash || 'N/A'}</span>
-            ${tx.hash ? `<button class="copy-btn" onclick="event.stopPropagation(); copyToClipboard('${tx.hash}', this)" title="Copy hash">📋</button>` : ''}
-          </span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">📤 Từ:</span>
-          <span class="detail-value" style="word-break: break-all;">${tx.from}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">📥 Đến:</span>
-          <span class="detail-value" style="word-break: break-all;">${tx.to}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">💰 Số tiền:</span>
-          <span class="detail-value" style="color: #4B5EAA; font-weight: bold;">${tx.value} ETH</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">⛽ Gas Fee:</span>
-          <span class="detail-value">${tx.gasFee || 'N/A'} ETH</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">⚡ Gas Price:</span>
-          <span class="detail-value">${tx.gasPrice || 'N/A'} Gwei</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">📦 Block Number:</span>
-          <span class="detail-value">${tx.blockNumber || 'N/A'}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">🕐 Thời gian:</span>
-          <span class="detail-value">${new Date(tx.timestamp).toLocaleString('vi-VN')}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">✅ Trạng thái:</span>
-          <span class="detail-value">
-            <span class="status-badge ${tx.status === 'success' ? 'status-success' : 'status-failed'}">
-              ${tx.status === 'success' ? '✓ Thành công' : '✗ Thất bại'}
-            </span>
-          </span>
-        </div>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="border: none; padding: 12px 0; width: 35%; vertical-align: top;">
+              <span class="detail-label" style="font-size: 14px;">🔗 Transaction Hash:</span>
+            </td>
+            <td style="border: none; padding: 12px 0 12px 12px; word-break: break-all; font-family: 'Courier New', monospace; font-size: 13px; color: var(--text-primary); text-align: right;">
+              ${tx.hash || 'N/A'}
+            </td>
+          </tr>
+          <tr>
+            <td style="border: none; padding: 12px 0; width: 35%; vertical-align: top;">
+              <span class="detail-label" style="font-size: 14px;">📤 Từ:</span>
+            </td>
+            <td style="border: none; padding: 12px 0 12px 12px; word-break: break-all; font-family: 'Courier New', monospace; font-size: 13px; color: var(--text-primary); text-align: right;">
+              ${tx.from}
+            </td>
+          </tr>
+          <tr>
+            <td style="border: none; padding: 12px 0; width: 35%; vertical-align: top;">
+              <span class="detail-label" style="font-size: 14px;">📥 Đến:</span>
+            </td>
+            <td style="border: none; padding: 12px 0 12px 12px; word-break: break-all; font-family: 'Courier New', monospace; font-size: 13px; color: var(--text-primary); text-align: right;">
+              ${tx.to}
+            </td>
+          </tr>
+          <tr>
+            <td style="border: none; padding: 12px 0;">
+              <span class="detail-label" style="font-size: 14px;">💰 Số tiền:</span>
+            </td>
+            <td style="border: none; padding: 12px 0 12px 12px; color: #4B5EAA; font-weight: 600; font-size: 17px; text-align: right;">
+              ${tx.value} ETH
+            </td>
+          </tr>
+          <tr>
+            <td style="border: none; padding: 12px 0;">
+              <span class="detail-label" style="font-size: 14px;">⛽ Gas Fee:</span>
+            </td>
+            <td style="border: none; padding: 12px 0 12px 12px; color: var(--text-primary); font-size: 14px; text-align: right;">
+              ${tx.gasFee || 'N/A'} ETH
+            </td>
+          </tr>
+          <tr>
+            <td style="border: none; padding: 12px 0;">
+              <span class="detail-label" style="font-size: 14px;">⚡ Gas Price:</span>
+            </td>
+            <td style="border: none; padding: 12px 0 12px 12px; color: var(--text-primary); font-size: 14px; text-align: right;">
+              ${tx.gasPrice || 'N/A'} Gwei
+            </td>
+          </tr>
+          <tr>
+            <td style="border: none; padding: 12px 0;">
+              <span class="detail-label" style="font-size: 14px;">📦 Block Number:</span>
+            </td>
+            <td style="border: none; padding: 12px 0 12px 12px; color: var(--text-primary); font-size: 14px; text-align: right;">
+              ${tx.blockNumber || 'N/A'}
+            </td>
+          </tr>
+          <tr>
+            <td style="border: none; padding: 12px 0;">
+              <span class="detail-label" style="font-size: 14px;">🕐 Thời gian:</span>
+            </td>
+            <td style="border: none; padding: 12px 0 12px 12px; color: var(--text-primary); font-size: 14px; text-align: right;">
+              ${new Date(tx.timestamp).toLocaleString('vi-VN')}
+            </td>
+          </tr>
+          <tr>
+            <td style="border: none; padding: 12px 0;">
+              <span class="detail-label" style="font-size: 14px;">✅ Trạng thái:</span>
+            </td>
+            <td style="border: none; padding: 12px 0 12px 12px; text-align: right;">
+              <span class="status-badge ${tx.status === 'success' ? 'status-success' : 'status-failed'}">
+                ${tx.status === 'success' ? '✓ Thành công' : '✗ Thất bại'}
+              </span>
+            </td>
+          </tr>
+        </table>
       `;
       
       modal.classList.add('show');
     }
 
-    function closeModal() {
-      const modal = document.getElementById('txDetailModal');
+    function closeModal(modalId) {
+      const modal = document.getElementById(modalId);
       modal.classList.remove('show');
     }
 
@@ -1181,9 +1357,18 @@
     }
 
     globalThis.addEventListener('click', function(event) {
-      const modal = document.getElementById('txDetailModal');
-      if (event.target === modal) {
-        closeModal();
+      const txModal = document.getElementById('txDetailModal');
+      const walletModal = document.getElementById('walletInfoModal');
+      
+      // Click vào background của modal chi tiết → chỉ đóng modal chi tiết
+      if (event.target === txModal) {
+        closeModal('txDetailModal');
+      }
+      
+      // Click vào background của modal ví → đóng cả hai modal
+      if (event.target === walletModal) {
+        closeModal('txDetailModal');
+        closeModal('walletInfoModal');
       }
     });
 
@@ -1216,13 +1401,12 @@
       localStorage.setItem('dashboardTab', tab);
       const content = document.getElementById('tabContent');
       
-      if (tab === 'balance') content.innerHTML = renderBalanceTab();
-      else if (tab === 'chart') {
+      if (tab === 'chart') {
         content.innerHTML = renderChartTab();
         setTimeout(() => renderBalanceChart(), 100);
       }
       else if (tab === 'transfer') content.innerHTML = renderTransferTab();
-      else if (tab === 'history') content.innerHTML = renderHistoryTab();
+      else if (tab === 'contract') content.innerHTML = renderContractTab();
       else if (tab === 'logs') content.innerHTML = renderLogsTab();
     }
 
@@ -1370,6 +1554,248 @@
 
     // ==================== TRANSACTION FUNCTIONS ====================
     
+    async function calculateContractGasFee() {
+      const value = document.getElementById('contractValue').value || '0';
+      const gasLimit = document.getElementById('contractGasLimit').value || '3000000';
+      const displayEl = document.getElementById('contractGasFeeDisplay');
+
+      if (!gasLimit || gasLimit <= 0) {
+        displayEl.innerHTML = '';
+        return;
+      }
+
+      try {
+        const gasPrice = await web3.eth.getGasPrice();
+        const gasFeeWei = BigInt(gasPrice) * BigInt(gasLimit);
+        const gasFeeEth = web3.utils.fromWei(gasFeeWei.toString(), 'ether');
+        const total = (Number.parseFloat(value) + Number.parseFloat(gasFeeEth)).toFixed(6);
+        
+        displayEl.innerHTML = `
+          <div class="gas-fee-box">
+            <div style="font-weight: bold; margin-bottom: 10px; color: var(--text-primary);">⛽ Chi phí triển khai</div>
+            <div class="gas-fee-row">
+              <span>Gas Price:</span>
+              <span>${Number.parseFloat(web3.utils.fromWei(gasPrice, 'gwei')).toFixed(2)} Gwei</span>
+            </div>
+            <div class="gas-fee-row">
+              <span>Gas Limit:</span>
+              <span>${gasLimit}</span>
+            </div>
+            <div class="gas-fee-row">
+              <span>Gas Fee:</span>
+              <span>${Number.parseFloat(gasFeeEth).toFixed(6)} ETH</span>
+            </div>
+            ${value > 0 ? `<div class="gas-fee-row">
+              <span>ETH gửi kèm:</span>
+              <span>${value} ETH</span>
+            </div>` : ''}
+            <div class="gas-fee-row total">
+              <span>Tổng cộng:</span>
+              <span>${total} ETH</span>
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        displayEl.innerHTML = `<div class="message error">❌ ${err.message}</div>`;
+      }
+    }
+
+    async function handleDeployContract() {
+      const bytecode = document.getElementById('contractBytecode').value.trim();
+      const argsInput = document.getElementById('contractArgs').value.trim();
+      const value = document.getElementById('contractValue').value || '0';
+      const gasLimit = document.getElementById('contractGasLimit').value || '3000000';
+      const passwordInput = document.getElementById('contractPassword');
+      const password = passwordInput ? passwordInput.value : '';
+      const messageEl = document.getElementById('contractMessage');
+
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
+
+      if (!bytecode) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập bytecode hợp đồng</div>';
+        return;
+      }
+
+      if (!bytecode.startsWith('0x')) {
+        messageEl.innerHTML = '<div class="message error">❌ Bytecode phải bắt đầu bằng 0x</div>';
+        return;
+      }
+
+      if (!isDevAccount && !password) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập mật khẩu</div>';
+        return;
+      }
+
+      let args = [];
+      if (argsInput) {
+        try {
+          args = JSON.parse(argsInput);
+          if (!Array.isArray(args)) {
+            throw new TypeError('Arguments phải là array');
+          }
+        } catch (err) {
+          messageEl.innerHTML = '<div class="message error">❌ Constructor arguments không hợp lệ (phải là JSON array)</div>';
+          return;
+        }
+      }
+
+      const confirmMsg = `🔍 XÁC NHẬN TRIỂN KHAI HỢP ĐỒNG\n\n` +
+        `Từ: ${currentAccount}\n` +
+        `Gas Limit: ${gasLimit}\n` +
+        `ETH gửi kèm: ${value} ETH\n\n` +
+        `Bạn có chắc chắn muốn triển khai hợp đồng này?`;
+      
+      if (!confirm(confirmMsg)) {
+        messageEl.innerHTML = '<div class="message info">❌ Đã hủy triển khai</div>';
+        return;
+      }
+
+      messageEl.innerHTML = '<div class="message info">⏳ Đang triển khai hợp đồng...</div>';
+
+      try {
+        const account = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+        if (!account) throw new Error('Không tìm thấy tài khoản!');
+
+        const valueWei = value > 0 ? web3.utils.toWei(value.toString(), 'ether') : '0';
+        const gasPrice = await web3.eth.getGasPrice();
+
+        let receipt;
+        let contractAddress;
+
+        if (isDevAccount) {
+          const tx = {
+            from: currentAccount,
+            data: bytecode,
+            gas: gasLimit,
+            gasPrice: gasPrice,
+            value: valueWei
+          };
+
+          receipt = await web3.eth.sendTransaction(tx);
+          contractAddress = receipt.contractAddress;
+        } else {
+          let decrypted;
+          try {
+            decrypted = web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
+          } catch {
+            throw new Error('Mật khẩu không đúng!');
+          }
+
+          const tx = {
+            from: currentAccount,
+            data: bytecode,
+            gas: gasLimit,
+            gasPrice: gasPrice,
+            value: valueWei
+          };
+
+          const signedTx = await web3.eth.accounts.signTransaction(tx, decrypted.privateKey);
+          receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+          contractAddress = receipt.contractAddress;
+        }
+
+        const gasFeeWei = BigInt(gasPrice) * BigInt(receipt.gasUsed);
+        const gasFeeEth = web3.utils.fromWei(gasFeeWei.toString(), 'ether');
+
+        // Save deployed contract
+        const contracts = JSON.parse(localStorage.getItem('deployedContracts') || '[]');
+        contracts.unshift({
+          address: contractAddress,
+          deployer: currentAccount,
+          transactionHash: receipt.transactionHash,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed,
+          gasFee: gasFeeEth,
+          value: value,
+          timestamp: new Date().toISOString()
+        });
+        localStorage.setItem('deployedContracts', JSON.stringify(contracts));
+
+        logToBackend('CONTRACT_DEPLOYED', {
+          contractAddress,
+          deployer: currentAccount,
+          transactionHash: receipt.transactionHash,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed,
+          timestamp: new Date().toISOString()
+        });
+
+        messageEl.innerHTML = `
+          <div class="message success">
+            ✅ Triển khai thành công!<br>
+            <strong>Địa chỉ hợp đồng:</strong><br>
+            <div style="font-family: 'Courier New', monospace; font-size: 13px; word-break: break-all; margin: 10px 0; padding: 10px; background: var(--table-header); border-radius: 8px;">
+              ${contractAddress}
+              <button class="copy-btn" onclick="copyToClipboard('${contractAddress}', this)" title="Copy address">📋</button>
+            </div>
+            <small>Hash: ${receipt.transactionHash}</small><br>
+            <small>Gas sử dụng: ${receipt.gasUsed}</small>
+          </div>
+        `;
+
+        document.getElementById('contractBytecode').value = '';
+        document.getElementById('contractArgs').value = '';
+        document.getElementById('contractValue').value = '';
+        if (passwordInput) passwordInput.value = '';
+        document.getElementById('contractGasFeeDisplay').innerHTML = '';
+
+        renderDeployedContractsList();
+        await loadBalance();
+
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+        
+        logToBackend('CONTRACT_DEPLOY_FAILED', {
+          deployer: currentAccount,
+          error: err.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    function renderDeployedContractsList() {
+      const listEl = document.getElementById('deployedContractsList');
+      if (!listEl) return;
+
+      const contracts = JSON.parse(localStorage.getItem('deployedContracts') || '[]');
+      const myContracts = contracts.filter(c => c.deployer.toLowerCase() === currentAccount.toLowerCase());
+
+      if (myContracts.length === 0) {
+        listEl.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">Chưa triển khai hợp đồng nào</p>';
+        return;
+      }
+
+      listEl.innerHTML = `
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Địa chỉ Hợp đồng</th>
+                <th>Block</th>
+                <th>Gas Used</th>
+                <th>Thời gian</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${myContracts.map(contract => `
+                <tr>
+                  <td class="address">
+                    ${contract.address.slice(0, 10)}...${contract.address.slice(-8)}
+                    <button class="copy-btn" onclick="copyToClipboard('${contract.address}', this)" title="Copy address">📋</button>
+                  </td>
+                  <td>${contract.blockNumber}</td>
+                  <td>${contract.gasUsed}</td>
+                  <td style="font-size: 12px;">${new Date(contract.timestamp).toLocaleString('vi-VN')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
     async function calculateGasFee() {
       const to = document.getElementById('transferTo').value;
       const amount = document.getElementById('transferAmount').value;
@@ -1411,29 +1837,6 @@
         `;
       } catch (err) {
         displayEl.innerHTML = `<div class="message error">❌ ${err.message}</div>`;
-      }
-    }
-
-    function searchTransaction() {
-      const searchTerm = document.getElementById('searchTx').value.toLowerCase().trim();
-      const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
-      
-      if (!searchTerm) {
-        document.getElementById('historyTableBody').innerHTML = renderHistoryRows(history);
-        return;
-      }
-
-      const filtered = history.filter(tx => 
-        tx.hash.toLowerCase().includes(searchTerm) ||
-        tx.from.toLowerCase().includes(searchTerm) ||
-        tx.to.toLowerCase().includes(searchTerm)
-      );
-
-      const tbody = document.getElementById('historyTableBody');
-      if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: var(--text-secondary);">Không tìm thấy giao dịch nào</td></tr>';
-      } else {
-        tbody.innerHTML = renderHistoryRows(filtered);
       }
     }
 
@@ -1492,7 +1895,7 @@
         const existing = accounts.find(a => a.address.toLowerCase() === address.toLowerCase());
         
         if (existing) {
-          messageEl.innerHTML = `<div class="message info">ℹ️ Dev account đã tồn tại!<br>📍 ${address}<br>💰 Số dư: ${balance} ETH</div>`;
+          messageEl.innerHTML = `<div class="message info">ℹ️ Dev account đã tồn tại!<br>🔑 ${address}<br>💰 Số dư: ${balance} ETH</div>`;
           
           setTimeout(() => {
             currentAccount = address;
@@ -1511,7 +1914,7 @@
         });
         localStorage.setItem('walletAccounts', JSON.stringify(accounts));
 
-        messageEl.innerHTML = `<div class="message success">✅ Import thành công!<br>📍 ${address}<br>💰 Số dư: ${balance} ETH<br>🔓 Không cần mật khẩu (quản lý bởi Geth)</div>`;
+        messageEl.innerHTML = `<div class="message success">✅ Import thành công!<br>🔑 ${address}<br>💰 Số dư: ${balance} ETH<br>🔓 Không cần mật khẩu (quản lý bởi Geth)</div>`;
         
         setTimeout(() => {
           currentAccount = address;
@@ -1607,39 +2010,6 @@
       }
     }
 
-    async function checkBalance() {
-      const address = document.getElementById('checkAddress').value;
-      const resultEl = document.getElementById('balanceResult');
-
-      if (!address) {
-        resultEl.innerHTML = '<div class="message error">❌ Vui lòng nhập địa chỉ</div>';
-        return;
-      }
-
-      const validation = validateAddress(address);
-      if (!validation.valid) {
-        resultEl.innerHTML = `<div class="message error">${validation.message}</div>`;
-        return;
-      }
-
-      resultEl.innerHTML = '<div class="message info">⏳ Đang kiểm tra...</div>';
-
-      try {
-        const balance = await getBalance(address);
-        const formattedBalance = Number.parseFloat(balance).toFixed(6);
-        resultEl.innerHTML = `
-          <div class="message success">
-            💰 Số dư: <strong>${formattedBalance} ETH</strong>
-            <div class="security-badge verified" style="margin-top: 10px;">
-              ✅ Địa chỉ hợp lệ (Checksum đã xác thực)
-            </div>
-          </div>
-        `;
-      } catch (err) {
-        resultEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
-      }
-    }
-
     async function handleTransfer() {
       const to = document.getElementById('transferTo').value.trim();
       const amount = document.getElementById('transferAmount').value;
@@ -1658,7 +2028,7 @@
 
       const validation = validateAddress(to);
       if (!validation.valid) {
-        messageEl.innerHTML = `<div class="message error">❌ ${validation.message}</div>`;
+        messageEl.innerHTML = `<div class="message error">${validation.message}</div>`;
         return;
       }
 
@@ -1677,7 +2047,7 @@
       }
 
       const checksumTo = web3.utils.toChecksumAddress(to);
-      const confirmMsg = `🔐 XÁC NHẬN GIAO DỊCH\n\n` +
+      const confirmMsg = `🔍 XÁC NHẬN GIAO DỊCH\n\n` +
         `Từ: ${currentAccount}\n` +
         `Đến: ${checksumTo}\n` +
         `Số tiền: ${amount} ETH\n\n` +
@@ -1717,7 +2087,7 @@
             </div><br>
             <button onclick='showTransactionDetail(${txJson})' 
                     style="margin-top: 10px; width: auto; padding: 8px 16px;">
-              🔍 Xem chi tiết
+              📋 Xem chi tiết
             </button>
           </div>
         `;
@@ -1747,6 +2117,8 @@
       }
     }
 
+    // ==================== INITIALIZATION ====================
+    
     void async function() {
       initTheme();
       
@@ -1778,7 +2150,15 @@
       
       if (currentPage === 'dashboard') {
         await loadBalance();
-        switchTab(localStorage.getItem('dashboardTab') || 'balance');
+        const savedTab = localStorage.getItem('dashboardTab');
+        if (!savedTab || savedTab === 'balance' || savedTab === 'history') {
+          switchTab('chart');
+        } else {
+          switchTab(savedTab);
+          if (savedTab === 'contract') {
+            setTimeout(() => renderDeployedContractsList(), 100);
+          }
+        }
         setInterval(loadBalance, 10000);
       }
     }();
