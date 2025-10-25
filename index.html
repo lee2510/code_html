@@ -312,7 +312,7 @@
       let history = JSON.parse(localStorage.getItem(historyKey) || '[]');
       
       const now = new Date().toISOString();
-      const lastEntry = history.length > 0 ? history[history.length - 1] : null;
+      const lastEntry = history.at(-1);
       
       // Chỉ lưu nếu số dư thay đổi hoặc đã qua 1 phút
       if (!lastEntry || 
@@ -754,19 +754,22 @@
     }
 
     function renderHistoryRows(history) {
-      return history.map(tx => `
-        <tr onclick='showTransactionDetail(${JSON.stringify(tx).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})' style="cursor: pointer;">
-          <td>${new Date(tx.timestamp).toLocaleString('vi-VN')}</td>
-          <td class="address">${tx.from.slice(0, 10)}...</td>
-          <td class="address">${tx.to.slice(0, 10)}...</td>
-          <td style="text-align: right; font-weight: bold;">${tx.value} ETH</td>
-          <td style="text-align: center;">
-            <span class="status-badge ${tx.status === 'success' ? 'status-success' : 'status-failed'}">
-              ${tx.status === 'success' ? '✓' : '✗'}
-            </span>
-          </td>
-        </tr>
-      `).join('');
+      return history.map(tx => {
+        const txJson = JSON.stringify(tx).replaceAll("'", "&#39;").replaceAll('"', "&quot;");
+        return `
+          <tr onclick='showTransactionDetail(${txJson})' style="cursor: pointer;">
+            <td>${new Date(tx.timestamp).toLocaleString('vi-VN')}</td>
+            <td class="address">${tx.from.slice(0, 10)}...</td>
+            <td class="address">${tx.to.slice(0, 10)}...</td>
+            <td style="text-align: right; font-weight: bold;">${tx.value} ETH</td>
+            <td style="text-align: center;">
+              <span class="status-badge ${tx.status === 'success' ? 'status-success' : 'status-failed'}">
+                ${tx.status === 'success' ? '✓' : '✗'}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
     function renderLogsTab() {
@@ -1252,6 +1255,7 @@
         }, 1000);
       } catch (err) {
         messageEl.innerHTML = '<div class="message error">❌ Sai mật khẩu!</div>';
+        logToBackend('LOGIN_FAILED', { address, error: err.message });
       }
     }
 
@@ -1364,11 +1368,12 @@
         });
         localStorage.setItem('txHistory', JSON.stringify(history));
 
+        const txJson = JSON.stringify(history[0]).replaceAll("'", "&#39;").replaceAll('"', "&quot;");
         messageEl.innerHTML = `
           <div class="message success">
             ✅ Thành công!<br>
             <small>Hash: ${receipt.transactionHash}</small><br>
-            <button onclick='showTransactionDetail(${JSON.stringify(history[0]).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})' 
+            <button onclick='showTransactionDetail(${txJson})' 
                     style="margin-top: 10px; width: auto; padding: 8px 16px;">
               🔍 Xem chi tiết
             </button>
@@ -1394,10 +1399,25 @@
 
     // ==================== INITIALIZATION ====================
     
-    (async function init() {
+    // Start app with top-level await
+    try {
       const connected = await initWeb3();
       
-      if (!connected) {
+      if (connected) {
+        const savedAccount = localStorage.getItem('currentAccount');
+        if (savedAccount) {
+          currentAccount = savedAccount;
+          currentPage = 'dashboard';
+        }
+
+        render();
+        
+        if (currentPage === 'dashboard') {
+          await loadBalance();
+          switchTab(localStorage.getItem('dashboardTab') || 'balance');
+          setInterval(loadBalance, 10000);
+        }
+      } else {
         document.getElementById('app').innerHTML = `
           <div class="card" style="max-width: 600px; margin: 50px auto; text-align: center;">
             <h1 style="color: #DC2626;">❌ Không thể kết nối Geth</h1>
@@ -1410,23 +1430,17 @@
             <button onclick="location.reload()">🔄 Thử lại</button>
           </div>
         `;
-        return;
       }
-
-      const savedAccount = localStorage.getItem('currentAccount');
-      if (savedAccount) {
-        currentAccount = savedAccount;
-        currentPage = 'dashboard';
-      }
-
-      render();
-      
-      if (currentPage === 'dashboard') {
-        loadBalance();
-        switchTab(localStorage.getItem('dashboardTab') || 'balance');
-        setInterval(loadBalance, 10000);
-      }
-    })();
+    } catch (error) {
+      console.error('Initialization error:', error);
+      document.getElementById('app').innerHTML = `
+        <div class="card" style="max-width: 600px; margin: 50px auto; text-align: center;">
+          <h1 style="color: #DC2626;">❌ Lỗi khởi tạo</h1>
+          <p style="margin: 20px 0; color: #991B1B;">${error.message}</p>
+          <button onclick="location.reload()">🔄 Thử lại</button>
+        </div>
+      `;
+    }
   </script>
 </body>
 </html>
