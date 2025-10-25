@@ -933,8 +933,14 @@
           <button class="tab ${activeTab === 'transfer' ? 'active' : ''}" onclick="switchTab('transfer')">
             💸 Chuyển tiền
           </button>
+          <button class="tab ${activeTab === 'erc20' ? 'active' : ''}" onclick="switchTab('erc20')">
+            🪙 ERC-20 Token
+          </button>
           <button class="tab ${activeTab === 'contract' ? 'active' : ''}" onclick="switchTab('contract')">
-            📄 Hợp đồng
+            📄 Deploy Contract
+          </button>
+          <button class="tab ${activeTab === 'interact' ? 'active' : ''}" onclick="switchTab('interact')">
+            🔧 Contract Interact
           </button>
           <button class="tab ${activeTab === 'logs' ? 'active' : ''}" onclick="switchTab('logs')">
             📊 Logs
@@ -1044,7 +1050,7 @@
       `;
     }
 
-    function renderContractTab() {
+   function renderContractTab() {
       const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
       const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
       const isDevAccount = currentAcc && currentAcc.type === 'dev';
@@ -1123,6 +1129,966 @@
       `;
     }
 
+    // ==================== ERC-20 TOKEN TAB ====================
+    
+    function renderERC20Tab() {
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
+      
+      return `
+        <h2>🪙 Tương tác với ERC-20 Token</h2>
+        ${isDevAccount ? '<p style="color: #0D9488; font-size: 13px; margin-bottom: 10px;">🔥 Dev Account - Không cần mật khẩu cho các giao dịch</p>' : ''}
+        
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-primary);">
+            📍 Địa chỉ Token Contract:
+          </label>
+          <input 
+            type="text" 
+            id="erc20ContractAddress" 
+            placeholder="0x..."
+            oninput="validateERC20Address()"
+          />
+          <div id="erc20AddressValidation" class="address-validation"></div>
+          <button onclick="loadERC20Info()" style="margin-top: 10px;">
+            🔍 Tải thông tin Token
+          </button>
+        </div>
+
+        <div id="erc20InfoDisplay" style="display: none; margin-top: 20px; padding: 20px; background: var(--table-header); border-radius: 12px;">
+          <h3 style="margin-bottom: 15px; color: var(--text-primary);">📊 Thông tin Token</h3>
+          <div class="grid-2">
+            <div>
+              <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 5px;">Tên Token:</div>
+              <div id="tokenName" style="font-weight: 600; font-size: 16px; color: var(--text-primary);">-</div>
+            </div>
+            <div>
+              <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 5px;">Symbol:</div>
+              <div id="tokenSymbol" style="font-weight: 600; font-size: 16px; color: var(--text-primary);">-</div>
+            </div>
+            <div>
+              <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 5px;">Decimals:</div>
+              <div id="tokenDecimals" style="font-weight: 600; font-size: 16px; color: var(--text-primary);">-</div>
+            </div>
+            <div>
+              <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 5px;">Số dư của bạn:</div>
+              <div id="tokenBalance" style="font-weight: 600; font-size: 16px; color: #4B5EAA;">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="erc20ActionsPanel" style="display: none; margin-top: 30px;">
+          <div style="border: 2px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="margin-bottom: 15px; color: var(--text-primary);">💸 Transfer Token</h3>
+            <input 
+              type="text" 
+              id="erc20TransferTo" 
+              placeholder="Địa chỉ nhận (0x...)"
+              oninput="validateERC20TransferAddress()"
+            />
+            <div id="erc20TransferValidation" class="address-validation"></div>
+            <input 
+              type="number" 
+              id="erc20TransferAmount" 
+              placeholder="Số lượng token" 
+              step="any"
+            />
+            ${isDevAccount ? '' : '<input type="password" id="erc20TransferPassword" placeholder="Mật khẩu ví" />'}
+            <button onclick="handleERC20Transfer()" class="success">
+              🚀 Gửi Token
+            </button>
+            <div id="erc20TransferMessage"></div>
+          </div>
+
+          <div style="border: 2px solid var(--border-color); border-radius: 12px; padding: 20px;">
+            <h3 style="margin-bottom: 15px; color: var(--text-primary);">✅ Approve Token</h3>
+            <input 
+              type="text" 
+              id="erc20ApproveSpender" 
+              placeholder="Địa chỉ được phép chi tiêu (0x...)"
+              oninput="validateERC20ApproveAddress()"
+            />
+            <div id="erc20ApproveValidation" class="address-validation"></div>
+            <input 
+              type="number" 
+              id="erc20ApproveAmount" 
+              placeholder="Số lượng token cho phép" 
+              step="any"
+            />
+            ${isDevAccount ? '' : '<input type="password" id="erc20ApprovePassword" placeholder="Mật khẩu ví" />'}
+            <button onclick="handleERC20Approve()" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+              ✅ Approve
+            </button>
+            <div id="erc20ApproveMessage"></div>
+          </div>
+        </div>
+
+        <div id="erc20Message"></div>
+      `;
+    }
+
+    // ERC-20 Standard ABI
+    const ERC20_ABI = [
+      {
+        "constant": true,
+        "inputs": [],
+        "name": "name",
+        "outputs": [{"name": "", "type": "string"}],
+        "type": "function"
+      },
+      {
+        "constant": true,
+        "inputs": [],
+        "name": "symbol",
+        "outputs": [{"name": "", "type": "string"}],
+        "type": "function"
+      },
+      {
+        "constant": true,
+        "inputs": [],
+        "name": "decimals",
+        "outputs": [{"name": "", "type": "uint8"}],
+        "type": "function"
+      },
+      {
+        "constant": true,
+        "inputs": [{"name": "_owner", "type": "address"}],
+        "name": "balanceOf",
+        "outputs": [{"name": "balance", "type": "uint256"}],
+        "type": "function"
+      },
+      {
+        "constant": false,
+        "inputs": [
+          {"name": "_to", "type": "address"},
+          {"name": "_value", "type": "uint256"}
+        ],
+        "name": "transfer",
+        "outputs": [{"name": "", "type": "bool"}],
+        "type": "function"
+      },
+      {
+        "constant": false,
+        "inputs": [
+          {"name": "_spender", "type": "address"},
+          {"name": "_value", "type": "uint256"}
+        ],
+        "name": "approve",
+        "outputs": [{"name": "", "type": "bool"}],
+        "type": "function"
+      }
+    ];
+
+    let currentERC20Contract = null;
+    let currentTokenDecimals = 18;
+
+    function validateERC20Address() {
+      const address = document.getElementById('erc20ContractAddress').value.trim();
+      const validationDiv = document.getElementById('erc20AddressValidation');
+      
+      if (!address) {
+        validationDiv.innerHTML = '';
+        return;
+      }
+
+      const validation = validateAddress(address);
+      
+      if (validation.valid) {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #0D9488;">✅</span>
+          <span style="color: #0D9488;">${validation.message}</span>
+        `;
+      } else {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #DC2626;">❌</span>
+          <span style="color: #DC2626;">${validation.message}</span>
+        `;
+      }
+    }
+
+    async function loadERC20Info() {
+      const address = document.getElementById('erc20ContractAddress').value.trim();
+      const messageEl = document.getElementById('erc20Message');
+      
+      if (!address) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập địa chỉ contract</div>';
+        return;
+      }
+
+      const validation = validateAddress(address);
+      if (!validation.valid) {
+        messageEl.innerHTML = `<div class="message error">${validation.message}</div>`;
+        return;
+      }
+
+      messageEl.innerHTML = '<div class="message info">⏳ Đang tải thông tin token...</div>';
+
+      try {
+        const checksumAddress = web3.utils.toChecksumAddress(address);
+        currentERC20Contract = new web3.eth.Contract(ERC20_ABI, checksumAddress);
+
+        const [name, symbol, decimals, balance] = await Promise.all([
+          currentERC20Contract.methods.name().call().catch(() => 'Unknown'),
+          currentERC20Contract.methods.symbol().call().catch(() => 'N/A'),
+          currentERC20Contract.methods.decimals().call().catch(() => 18),
+          currentERC20Contract.methods.balanceOf(currentAccount).call()
+        ]);
+
+        currentTokenDecimals = Number(decimals);
+        const formattedBalance = Number.parseFloat(balance) / Math.pow(10, currentTokenDecimals);
+
+        document.getElementById('tokenName').textContent = name;
+        document.getElementById('tokenSymbol').textContent = symbol;
+        document.getElementById('tokenDecimals').textContent = decimals;
+        document.getElementById('tokenBalance').textContent = formattedBalance.toFixed(6) + ' ' + symbol;
+
+        document.getElementById('erc20InfoDisplay').style.display = 'block';
+        document.getElementById('erc20ActionsPanel').style.display = 'block';
+        messageEl.innerHTML = '<div class="message success">✅ Đã tải thông tin token thành công!</div>';
+
+        logToBackend('ERC20_INFO_LOADED', {
+          contract: checksumAddress,
+          name,
+          symbol,
+          decimals,
+          balance: formattedBalance,
+          timestamp: new Date().toISOString()
+        });
+
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}<br><small>Contract có thể không phải ERC-20 hoặc không tồn tại</small></div>`;
+        document.getElementById('erc20InfoDisplay').style.display = 'none';
+        document.getElementById('erc20ActionsPanel').style.display = 'none';
+      }
+    }
+
+    function validateERC20TransferAddress() {
+      const address = document.getElementById('erc20TransferTo').value.trim();
+      const validationDiv = document.getElementById('erc20TransferValidation');
+      
+      if (!address) {
+        validationDiv.innerHTML = '';
+        return;
+      }
+
+      const validation = validateAddress(address);
+      
+      if (validation.valid) {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #0D9488;">✅</span>
+          <span style="color: #0D9488;">${validation.message}</span>
+        `;
+      } else {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #DC2626;">❌</span>
+          <span style="color: #DC2626;">${validation.message}</span>
+        `;
+      }
+    }
+
+    function validateERC20ApproveAddress() {
+      const address = document.getElementById('erc20ApproveSpender').value.trim();
+      const validationDiv = document.getElementById('erc20ApproveValidation');
+      
+      if (!address) {
+        validationDiv.innerHTML = '';
+        return;
+      }
+
+      const validation = validateAddress(address);
+      
+      if (validation.valid) {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #0D9488;">✅</span>
+          <span style="color: #0D9488;">${validation.message}</span>
+        `;
+      } else {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #DC2626;">❌</span>
+          <span style="color: #DC2626;">${validation.message}</span>
+        `;
+      }
+    }
+
+    async function handleERC20Transfer() {
+      const to = document.getElementById('erc20TransferTo').value.trim();
+      const amount = document.getElementById('erc20TransferAmount').value;
+      const passwordInput = document.getElementById('erc20TransferPassword');
+      const password = passwordInput ? passwordInput.value : '';
+      const messageEl = document.getElementById('erc20TransferMessage');
+
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
+
+      if (!currentERC20Contract) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng tải thông tin token trước</div>';
+        return;
+      }
+
+      if (!to || !amount) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập đầy đủ thông tin</div>';
+        return;
+      }
+
+      const validation = validateAddress(to);
+      if (!validation.valid) {
+        messageEl.innerHTML = `<div class="message error">${validation.message}</div>`;
+        return;
+      }
+
+      if (!isDevAccount && !password) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập mật khẩu</div>';
+        return;
+      }
+
+      const checksumTo = web3.utils.toChecksumAddress(to);
+      const amountInWei = (Number.parseFloat(amount) * Math.pow(10, currentTokenDecimals)).toString();
+
+      const confirmMsg = `🔐 XÁC NHẬN CHUYỂN TOKEN\n\n` +
+        `Từ: ${currentAccount}\n` +
+        `Đến: ${checksumTo}\n` +
+        `Số lượng: ${amount} tokens\n\n` +
+        `Bạn có chắc chắn muốn thực hiện giao dịch này?`;
+      
+      if (!confirm(confirmMsg)) {
+        messageEl.innerHTML = '<div class="message info">❌ Giao dịch đã bị hủy</div>';
+        return;
+      }
+
+      messageEl.innerHTML = '<div class="message info">⏳ Đang gửi giao dịch...</div>';
+
+      try {
+        const account = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+        if (!account) throw new Error('Không tìm thấy tài khoản!');
+
+        const data = currentERC20Contract.methods.transfer(checksumTo, amountInWei).encodeABI();
+        const gasPrice = await web3.eth.getGasPrice();
+        const gasLimit = await currentERC20Contract.methods.transfer(checksumTo, amountInWei).estimateGas({from: currentAccount});
+
+        let receipt;
+
+        if (isDevAccount) {
+          const tx = {
+            from: currentAccount,
+            to: currentERC20Contract.options.address,
+            data: data,
+            gas: gasLimit,
+            gasPrice: gasPrice
+          };
+          receipt = await web3.eth.sendTransaction(tx);
+        } else {
+          let decrypted;
+          try {
+            decrypted = web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
+          } catch {
+            throw new Error('Mật khẩu không đúng!');
+          }
+
+          const tx = {
+            from: currentAccount,
+            to: currentERC20Contract.options.address,
+            data: data,
+            gas: gasLimit,
+            gasPrice: gasPrice
+          };
+
+          const signedTx = await web3.eth.accounts.signTransaction(tx, decrypted.privateKey);
+          receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+        }
+
+        const gasFeeWei = BigInt(gasPrice) * BigInt(receipt.gasUsed);
+        const gasFeeEth = web3.utils.fromWei(gasFeeWei.toString(), 'ether');
+
+        logToBackend('ERC20_TRANSFER', {
+          contract: currentERC20Contract.options.address,
+          from: currentAccount,
+          to: checksumTo,
+          amount: amount,
+          hash: receipt.transactionHash,
+          gasUsed: receipt.gasUsed,
+          timestamp: new Date().toISOString()
+        });
+
+        messageEl.innerHTML = `
+          <div class="message success">
+            ✅ Chuyển token thành công!<br>
+            <small>Hash: ${receipt.transactionHash}</small><br>
+            <small>Gas sử dụng: ${receipt.gasUsed} (${Number.parseFloat(gasFeeEth).toFixed(6)} ETH)</small>
+          </div>
+        `;
+
+        document.getElementById('erc20TransferTo').value = '';
+        document.getElementById('erc20TransferAmount').value = '';
+        if (passwordInput) passwordInput.value = '';
+        document.getElementById('erc20TransferValidation').innerHTML = '';
+
+        setTimeout(() => loadERC20Info(), 2000);
+
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+        
+        logToBackend('ERC20_TRANSFER_FAILED', {
+          contract: currentERC20Contract.options.address,
+          from: currentAccount,
+          to: checksumTo,
+          amount: amount,
+          error: err.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    async function handleERC20Approve() {
+      const spender = document.getElementById('erc20ApproveSpender').value.trim();
+      const amount = document.getElementById('erc20ApproveAmount').value;
+      const passwordInput = document.getElementById('erc20ApprovePassword');
+      const password = passwordInput ? passwordInput.value : '';
+      const messageEl = document.getElementById('erc20ApproveMessage');
+
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
+
+      if (!currentERC20Contract) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng tải thông tin token trước</div>';
+        return;
+      }
+
+      if (!spender || !amount) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập đầy đủ thông tin</div>';
+        return;
+      }
+
+      const validation = validateAddress(spender);
+      if (!validation.valid) {
+        messageEl.innerHTML = `<div class="message error">${validation.message}</div>`;
+        return;
+      }
+
+      if (!isDevAccount && !password) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập mật khẩu</div>';
+        return;
+      }
+
+      const checksumSpender = web3.utils.toChecksumAddress(spender);
+      const amountInWei = (Number.parseFloat(amount) * Math.pow(10, currentTokenDecimals)).toString();
+
+      const confirmMsg = `🔐 XÁC NHẬN APPROVE TOKEN\n\n` +
+        `Chủ sở hữu: ${currentAccount}\n` +
+        `Được phép chi tiêu: ${checksumSpender}\n` +
+        `Số lượng: ${amount} tokens\n\n` +
+        `⚠️ Lưu ý: Địa chỉ này sẽ có quyền chi tiêu token của bạn!\n\n` +
+        `Bạn có chắc chắn muốn approve?`;
+      
+      if (!confirm(confirmMsg)) {
+        messageEl.innerHTML = '<div class="message info">❌ Đã hủy approve</div>';
+        return;
+      }
+
+      messageEl.innerHTML = '<div class="message info">⏳ Đang gửi giao dịch...</div>';
+
+      try {
+        const account = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+        if (!account) throw new Error('Không tìm thấy tài khoản!');
+
+        const data = currentERC20Contract.methods.approve(checksumSpender, amountInWei).encodeABI();
+        const gasPrice = await web3.eth.getGasPrice();
+        const gasLimit = await currentERC20Contract.methods.approve(checksumSpender, amountInWei).estimateGas({from: currentAccount});
+
+        let receipt;
+
+        if (isDevAccount) {
+          const tx = {
+            from: currentAccount,
+            to: currentERC20Contract.options.address,
+            data: data,
+            gas: gasLimit,
+            gasPrice: gasPrice
+          };
+          receipt = await web3.eth.sendTransaction(tx);
+        } else {
+          let decrypted;
+          try {
+            decrypted = web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
+          } catch {
+            throw new Error('Mật khẩu không đúng!');
+          }
+
+          const tx = {
+            from: currentAccount,
+            to: currentERC20Contract.options.address,
+            data: data,
+            gas: gasLimit,
+            gasPrice: gasPrice
+          };
+
+          const signedTx = await web3.eth.accounts.signTransaction(tx, decrypted.privateKey);
+          receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+        }
+
+        const gasFeeWei = BigInt(gasPrice) * BigInt(receipt.gasUsed);
+        const gasFeeEth = web3.utils.fromWei(gasFeeWei.toString(), 'ether');
+
+        logToBackend('ERC20_APPROVE', {
+          contract: currentERC20Contract.options.address,
+          owner: currentAccount,
+          spender: checksumSpender,
+          amount: amount,
+          hash: receipt.transactionHash,
+          gasUsed: receipt.gasUsed,
+          timestamp: new Date().toISOString()
+        });
+
+        messageEl.innerHTML = `
+          <div class="message success">
+            ✅ Approve thành công!<br>
+            <small>Hash: ${receipt.transactionHash}</small><br>
+            <small>Gas sử dụng: ${receipt.gasUsed} (${Number.parseFloat(gasFeeEth).toFixed(6)} ETH)</small>
+          </div>
+        `;
+
+        document.getElementById('erc20ApproveSpender').value = '';
+        document.getElementById('erc20ApproveAmount').value = '';
+        if (passwordInput) passwordInput.value = '';
+        document.getElementById('erc20ApproveValidation').innerHTML = '';
+
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+        
+        logToBackend('ERC20_APPROVE_FAILED', {
+          contract: currentERC20Contract.options.address,
+          owner: currentAccount,
+          spender: checksumSpender,
+          amount: amount,
+          error: err.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    // ==================== CONTRACT INTERACTION TAB ====================
+    
+    function renderInteractTab() {
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
+      
+      return `
+        <h2>🔧 Tương tác với Hợp đồng</h2>
+        ${isDevAccount ? '<p style="color: #0D9488; font-size: 13px; margin-bottom: 10px;">🔥 Dev Account - Không cần mật khẩu cho các giao dịch</p>' : ''}
+        
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-primary);">
+            📍 Địa chỉ Contract:
+          </label>
+          <input 
+            type="text" 
+            id="interactContractAddress" 
+            placeholder="0x..."
+            oninput="validateInteractAddress()"
+          />
+          <div id="interactAddressValidation" class="address-validation"></div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-primary);">
+            📋 Contract ABI (JSON):
+          </label>
+          <textarea 
+            id="interactContractABI" 
+            placeholder='[{"constant":true,"inputs":[],"name":"name",...}]'
+            style="width: 100%; min-height: 200px; padding: 12px; border-radius: 8px; border: 2px solid var(--border-color); font-family: 'Courier New', monospace; font-size: 12px; background: var(--bg-input); color: var(--text-primary); resize: vertical;"
+          ></textarea>
+          <small style="color: var(--text-secondary);">Nhập ABI của hợp đồng dưới dạng JSON array</small>
+        </div>
+
+        <button onclick="loadContractInterface()" style="margin-bottom: 20px;">
+          🔍 Tải giao diện Contract
+        </button>
+
+        <div id="interactMessage"></div>
+
+        <div id="contractInterfacePanel" style="display: none; margin-top: 30px;">
+          <div style="border: 2px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="margin-bottom: 15px; color: var(--text-primary);">👁️ Read Functions (View/Pure)</h3>
+            <div id="readFunctionsList"></div>
+          </div>
+
+          <div style="border: 2px solid var(--border-color); border-radius: 12px; padding: 20px;">
+            <h3 style="margin-bottom: 15px; color: var(--text-primary);">✍️ Write Functions (Transactions)</h3>
+            <div id="writeFunctionsList"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    let currentInteractContract = null;
+    let currentContractABI = null;
+
+    function validateInteractAddress() {
+      const address = document.getElementById('interactContractAddress').value.trim();
+      const validationDiv = document.getElementById('interactAddressValidation');
+      
+      if (!address) {
+        validationDiv.innerHTML = '';
+        return;
+      }
+
+      const validation = validateAddress(address);
+      
+      if (validation.valid) {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #0D9488;">✅</span>
+          <span style="color: #0D9488;">${validation.message}</span>
+        `;
+      } else {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #DC2626;">❌</span>
+          <span style="color: #DC2626;">${validation.message}</span>
+        `;
+      }
+    }
+
+    async function loadContractInterface() {
+      const address = document.getElementById('interactContractAddress').value.trim();
+      const abiInput = document.getElementById('interactContractABI').value.trim();
+      const messageEl = document.getElementById('interactMessage');
+
+      if (!address || !abiInput) {
+        messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập đầy đủ địa chỉ và ABI</div>';
+        return;
+      }
+
+      const validation = validateAddress(address);
+      if (!validation.valid) {
+        messageEl.innerHTML = `<div class="message error">${validation.message}</div>`;
+        return;
+      }
+
+      try {
+        currentContractABI = JSON.parse(abiInput);
+        if (!Array.isArray(currentContractABI)) {
+          throw new TypeError('ABI phải là một JSON array');
+        }
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ ABI không hợp lệ: ${err.message}</div>`;
+        return;
+      }
+
+      messageEl.innerHTML = '<div class="message info">⏳ Đang tải giao diện contract...</div>';
+
+      try {
+        const checksumAddress = web3.utils.toChecksumAddress(address);
+        currentInteractContract = new web3.eth.Contract(currentContractABI, checksumAddress);
+
+        const readFunctions = currentContractABI.filter(item => 
+          item.type === 'function' && (item.stateMutability === 'view' || item.stateMutability === 'pure' || item.constant === true)
+        );
+
+        const writeFunctions = currentContractABI.filter(item => 
+          item.type === 'function' && item.stateMutability !== 'view' && item.stateMutability !== 'pure' && item.constant !== true
+        );
+
+        renderReadFunctions(readFunctions);
+        renderWriteFunctions(writeFunctions);
+
+        document.getElementById('contractInterfacePanel').style.display = 'block';
+        messageEl.innerHTML = `<div class="message success">✅ Đã tải ${readFunctions.length} read functions và ${writeFunctions.length} write functions</div>`;
+
+        logToBackend('CONTRACT_INTERFACE_LOADED', {
+          contract: checksumAddress,
+          readFunctions: readFunctions.length,
+          writeFunctions: writeFunctions.length,
+          timestamp: new Date().toISOString()
+        });
+
+      } catch (err) {
+        messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+      }
+    }
+
+    function renderReadFunctions(functions) {
+      const container = document.getElementById('readFunctionsList');
+      
+      if (functions.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">Không có read function nào</p>';
+        return;
+      }
+
+      container.innerHTML = functions.map((func, index) => `
+        <div style="background: var(--table-header); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+          <div style="font-weight: 600; font-size: 15px; margin-bottom: 10px; color: var(--text-primary);">
+            📖 ${func.name}
+          </div>
+          ${func.inputs && func.inputs.length > 0 ? `
+            <div style="margin-bottom: 10px;">
+              ${func.inputs.map((input, inputIndex) => `
+                <input 
+                  type="text" 
+                  id="read_${index}_${inputIndex}" 
+                  placeholder="${input.name || 'param' + inputIndex} (${input.type})"
+                  style="margin-bottom: 8px;"
+                />
+              `).join('')}
+            </div>
+          ` : ''}
+          <button onclick="callReadFunction(${index})" style="width: auto; padding: 8px 16px; margin-right: 10px;">
+            🔍 Call
+          </button>
+          <div id="read_result_${index}" style="margin-top: 10px;"></div>
+        </div>
+      `).join('');
+    }
+
+    function renderWriteFunctions(functions) {
+      const container = document.getElementById('writeFunctionsList');
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
+      
+      if (functions.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">Không có write function nào</p>';
+        return;
+      }
+
+      container.innerHTML = functions.map((func, index) => `
+        <div style="background: var(--table-header); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+          <div style="font-weight: 600; font-size: 15px; margin-bottom: 10px; color: var(--text-primary);">
+            ✍️ ${func.name}
+          </div>
+          ${func.inputs && func.inputs.length > 0 ? `
+            <div style="margin-bottom: 10px;">
+              ${func.inputs.map((input, inputIndex) => `
+                <input 
+                  type="text" 
+                  id="write_${index}_${inputIndex}" 
+                  placeholder="${input.name || 'param' + inputIndex} (${input.type})"
+                  style="margin-bottom: 8px;"
+                />
+              `).join('')}
+            </div>
+          ` : ''}
+          ${func.payable || func.stateMutability === 'payable' ? `
+            <input 
+              type="number" 
+              id="write_value_${index}" 
+              placeholder="ETH to send (payable function)" 
+              step="0.001"
+              style="margin-bottom: 8px;"
+            />
+          ` : ''}
+          ${isDevAccount ? '' : `
+            <input 
+              type="password" 
+              id="write_password_${index}" 
+              placeholder="Mật khẩu ví" 
+              style="margin-bottom: 8px;"
+            />
+          `}
+          <button onclick="callWriteFunction(${index})" class="success" style="width: auto; padding: 8px 16px; margin-right: 10px;">
+            🚀 Execute
+          </button>
+          <div id="write_result_${index}" style="margin-top: 10px;"></div>
+        </div>
+      `).join('');
+    }
+
+    async function callReadFunction(functionIndex) {
+      const func = currentContractABI.filter(item => 
+        item.type === 'function' && (item.stateMutability === 'view' || item.stateMutability === 'pure' || item.constant === true)
+      )[functionIndex];
+      
+      const resultDiv = document.getElementById(`read_result_${functionIndex}`);
+      resultDiv.innerHTML = '<div class="message info">⏳ Đang gọi function...</div>';
+
+      try {
+        const params = [];
+        if (func.inputs && func.inputs.length > 0) {
+          for (let i = 0; i < func.inputs.length; i++) {
+            const value = document.getElementById(`read_${functionIndex}_${i}`).value.trim();
+            if (!value) {
+              throw new Error(`Vui lòng nhập ${func.inputs[i].name || 'tham số ' + i}`);
+            }
+            params.push(value);
+          }
+        }
+
+        const result = await currentInteractContract.methods[func.name](...params).call();
+        
+        let displayResult;
+        if (typeof result === 'object' && result !== null) {
+          displayResult = JSON.stringify(result, null, 2);
+        } else {
+          displayResult = result.toString();
+        }
+
+        resultDiv.innerHTML = `
+          <div class="message success">
+            <div style="font-weight: 600; margin-bottom: 5px;">✅ Kết quả:</div>
+            <div style="font-family: 'Courier New', monospace; font-size: 13px; background: var(--bg-input); padding: 10px; border-radius: 6px; word-break: break-all;">
+              ${displayResult}
+            </div>
+          </div>
+        `;
+
+        logToBackend('READ_FUNCTION_CALLED', {
+          contract: currentInteractContract.options.address,
+          function: func.name,
+          params,
+          result: displayResult,
+          timestamp: new Date().toISOString()
+        });
+
+      } catch (err) {
+        resultDiv.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+      }
+    }
+
+    async function callWriteFunction(functionIndex) {
+      const func = currentContractABI.filter(item => 
+        item.type === 'function' && item.stateMutability !== 'view' && item.stateMutability !== 'pure' && item.constant !== true
+      )[functionIndex];
+      
+      const resultDiv = document.getElementById(`write_result_${functionIndex}`);
+      const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
+      const currentAcc = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+      const isDevAccount = currentAcc && currentAcc.type === 'dev';
+
+      try {
+        const params = [];
+        if (func.inputs && func.inputs.length > 0) {
+          for (let i = 0; i < func.inputs.length; i++) {
+            const value = document.getElementById(`write_${functionIndex}_${i}`).value.trim();
+            if (!value) {
+              throw new Error(`Vui lòng nhập ${func.inputs[i].name || 'tham số ' + i}`);
+            }
+            params.push(value);
+          }
+        }
+
+        let valueWei = '0';
+        if (func.payable || func.stateMutability === 'payable') {
+          const valueInput = document.getElementById(`write_value_${functionIndex}`);
+          if (valueInput && valueInput.value) {
+            valueWei = web3.utils.toWei(valueInput.value, 'ether');
+          }
+        }
+
+        let password = '';
+        if (!isDevAccount) {
+          const passwordInput = document.getElementById(`write_password_${functionIndex}`);
+          password = passwordInput ? passwordInput.value : '';
+          if (!password) {
+            throw new Error('Vui lòng nhập mật khẩu');
+          }
+        }
+
+        const confirmMsg = `🔐 XÁC NHẬN THỰC THI FUNCTION\n\n` +
+          `Contract: ${currentInteractContract.options.address}\n` +
+          `Function: ${func.name}\n` +
+          `Parameters: ${JSON.stringify(params)}\n` +
+          `${valueWei !== '0' ? `Value: ${web3.utils.fromWei(valueWei, 'ether')} ETH\n` : ''}` +
+          `\nBạn có chắc chắn muốn thực hiện?`;
+        
+        if (!confirm(confirmMsg)) {
+          resultDiv.innerHTML = '<div class="message info">❌ Đã hủy thực thi</div>';
+          return;
+        }
+
+        resultDiv.innerHTML = '<div class="message info">⏳ Đang gửi transaction...</div>';
+
+        const data = currentInteractContract.methods[func.name](...params).encodeABI();
+        const gasPrice = await web3.eth.getGasPrice();
+        const gasLimit = await currentInteractContract.methods[func.name](...params).estimateGas({
+          from: currentAccount,
+          value: valueWei
+        });
+
+        let receipt;
+
+        if (isDevAccount) {
+          const tx = {
+            from: currentAccount,
+            to: currentInteractContract.options.address,
+            data: data,
+            gas: gasLimit,
+            gasPrice: gasPrice,
+            value: valueWei
+          };
+          receipt = await web3.eth.sendTransaction(tx);
+        } else {
+          const account = accounts.find(a => a.address.toLowerCase() === currentAccount.toLowerCase());
+          if (!account) throw new Error('Không tìm thấy tài khoản!');
+
+          let decrypted;
+          try {
+            decrypted = web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
+          } catch {
+            throw new Error('Mật khẩu không đúng!');
+          }
+
+          const tx = {
+            from: currentAccount,
+            to: currentInteractContract.options.address,
+            data: data,
+            gas: gasLimit,
+            gasPrice: gasPrice,
+            value: valueWei
+          };
+
+          const signedTx = await web3.eth.accounts.signTransaction(tx, decrypted.privateKey);
+          receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+        }
+
+        const gasFeeWei = BigInt(gasPrice) * BigInt(receipt.gasUsed);
+        const gasFeeEth = web3.utils.fromWei(gasFeeWei.toString(), 'ether');
+
+        logToBackend('WRITE_FUNCTION_CALLED', {
+          contract: currentInteractContract.options.address,
+          function: func.name,
+          params,
+          hash: receipt.transactionHash,
+          gasUsed: receipt.gasUsed,
+          timestamp: new Date().toISOString()
+        });
+
+        resultDiv.innerHTML = `
+          <div class="message success">
+            ✅ Transaction thành công!<br>
+            <small>Hash: ${receipt.transactionHash}</small><br>
+            <small>Gas sử dụng: ${receipt.gasUsed} (${Number.parseFloat(gasFeeEth).toFixed(6)} ETH)</small>
+          </div>
+        `;
+
+        // Clear inputs
+if (func.inputs) {
+  for (const [i, _] of func.inputs.entries()) {
+    document.getElementById(`write_${functionIndex}_${i}`).value = '';
+  }
+}
+if (func.payable || func.stateMutability === 'payable') {
+  const valueInput = document.getElementById(`write_value_${functionIndex}`);
+  if (valueInput) valueInput.value = '';
+}
+if (!isDevAccount) {
+  const passwordInput = document.getElementById(`write_password_${functionIndex}`);
+  if (passwordInput) passwordInput.value = '';
+}
+
+} catch (err) {
+  resultDiv.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+  
+  logToBackend('WRITE_FUNCTION_FAILED', {
+    contract: currentInteractContract.options.address,
+    function: func.name,
+    error: err.message,
+    timestamp: new Date().toISOString()
+  });
+}
+}
+    
     function renderHistoryRows(history) {
       return history.map(tx => {
         const txJson = JSON.stringify(tx).replaceAll("'", "&#39;").replaceAll('"', "&quot;");
@@ -1398,17 +2364,51 @@
     }
 
     function switchTab(tab) {
-      localStorage.setItem('dashboardTab', tab);
-      const content = document.getElementById('tabContent');
-      
-      if (tab === 'chart') {
-        content.innerHTML = renderChartTab();
-        setTimeout(() => renderBalanceChart(), 100);
-      }
-      else if (tab === 'transfer') content.innerHTML = renderTransferTab();
-      else if (tab === 'contract') content.innerHTML = renderContractTab();
-      else if (tab === 'logs') content.innerHTML = renderLogsTab();
-    }
+  localStorage.setItem('dashboardTab', tab);
+  updateTabActiveState(tab);
+  updateTabContent(tab);
+}
+
+function updateTabActiveState(tab) {
+  const tabs = document.querySelectorAll('.tab');
+  for (const t of tabs) {
+    t.classList.remove('active');
+  }
+  
+  for (const t of tabs) {
+    if (t.textContent.includes('Biểu đồ') && tab === 'chart') t.classList.add('active');
+    if (t.textContent.includes('Chuyển tiền') && tab === 'transfer') t.classList.add('active');
+    if (t.textContent.includes('ERC-20') && tab === 'erc20') t.classList.add('active');
+    if (t.textContent.includes('Deploy') && tab === 'contract') t.classList.add('active');
+    if (t.textContent.includes('Interact') && tab === 'interact') t.classList.add('active');
+    if (t.textContent.includes('Logs') && tab === 'logs') t.classList.add('active');
+  }
+}
+
+function updateTabContent(tab) {
+  const content = document.getElementById('tabContent');
+  
+  if (tab === 'chart') {
+    content.innerHTML = renderChartTab();
+    setTimeout(() => renderBalanceChart(), 100);
+  }
+  else if (tab === 'transfer') {
+    content.innerHTML = renderTransferTab();
+  }
+  else if (tab === 'erc20') {
+    content.innerHTML = renderERC20Tab();
+  }
+  else if (tab === 'contract') {
+    content.innerHTML = renderContractTab();
+    setTimeout(() => renderDeployedContractsList(), 100);
+  }
+  else if (tab === 'interact') {
+    content.innerHTML = renderInteractTab();
+  }
+  else if (tab === 'logs') {
+    content.innerHTML = renderLogsTab();
+  }
+}
 
     // ==================== CHART FUNCTIONS ====================
     
