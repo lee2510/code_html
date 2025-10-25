@@ -3,38 +3,90 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Geth Wallet Manager</title>
+  <title>Geth Wallet Manager - Secure</title>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
   <style>
+    :root {
+      --bg-primary: linear-gradient(135deg, #4B5EAA 0%, #6B7280 100%);
+      --bg-card: #FFFFFF;
+      --bg-input: #FFFFFF;
+      --text-primary: #1F2937;
+      --text-secondary: #6B7280;
+      --border-color: #D1D5DB;
+      --button-primary: linear-gradient(135deg, #4B5EAA 0%, #6366F1 100%);
+      --button-secondary: #E5E7EB;
+      --success-bg: #D1FAE5;
+      --success-text: #065F46;
+      --success-border: #0D9488;
+      --error-bg: #FEE2E2;
+      --error-text: #991B1B;
+      --error-border: #DC2626;
+      --warning-bg: #FEF3C7;
+      --warning-text: #92400E;
+      --warning-border: #F59E0B;
+      --table-header: #F3F4F6;
+      --table-border: #E5E7EB;
+      --table-hover: #F9FAFB;
+      --shadow: rgba(0,0,0,0.1);
+    }
+
+    [data-theme="dark"] {
+      --bg-primary: linear-gradient(135deg, #1F2937 0%, #111827 100%);
+      --bg-card: #1F2937;
+      --bg-input: #374151;
+      --text-primary: #F9FAFB;
+      --text-secondary: #D1D5DB;
+      --border-color: #4B5563;
+      --button-primary: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+      --button-secondary: #374151;
+      --success-bg: #064E3B;
+      --success-text: #D1FAE5;
+      --success-border: #0D9488;
+      --error-bg: #7F1D1D;
+      --error-text: #FEE2E2;
+      --error-border: #DC2626;
+      --warning-bg: #78350F;
+      --warning-text: #FEF3C7;
+      --warning-border: #F59E0B;
+      --table-header: #374151;
+      --table-border: #4B5563;
+      --table-hover: #2D3748;
+      --shadow: rgba(0,0,0,0.3);
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #4B5EAA 0%, #6B7280 100%);
+      background: var(--bg-primary);
       min-height: 100vh;
       padding: 20px;
-      color: #1F2937;
+      color: var(--text-primary);
+      transition: background 0.3s, color 0.3s;
     }
     .container { max-width: 1200px; margin: 0 auto; }
     .card { 
-      background: #FFFFFF; 
+      background: var(--bg-card); 
       border-radius: 16px; 
       padding: 30px; 
       margin-bottom: 20px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      box-shadow: 0 10px 30px var(--shadow);
+      transition: background 0.3s;
     }
     input, button, select { 
       width: 100%; 
       padding: 12px 16px; 
       border-radius: 8px; 
-      border: 2px solid #D1D5DB;
+      border: 2px solid var(--border-color);
       font-size: 14px;
       margin-bottom: 12px;
       transition: all 0.3s;
+      background: var(--bg-input);
+      color: var(--text-primary);
     }
     input:focus { border-color: #6366F1; outline: none; }
     button { 
-      background: linear-gradient(135deg, #4B5EAA 0%, #6366F1 100%);
+      background: var(--button-primary);
       color: #FFFFFF; 
       border: none; 
       cursor: pointer;
@@ -44,7 +96,7 @@
     }
     button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(75,94,170,0.3); }
     button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-    button.secondary { background: #E5E7EB; color: #1F2937; }
+    button.secondary { background: var(--button-secondary); color: var(--text-primary); }
     button.danger { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); }
     button.success { background: linear-gradient(135deg, #0D9488 0%, #047857 100%); }
     .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -52,16 +104,16 @@
       flex: 1; 
       min-width: 120px;
       padding: 14px 20px; 
-      background: #E5E7EB; 
+      background: var(--button-secondary); 
       border: none; 
       border-radius: 10px;
       cursor: pointer;
       font-weight: 600;
-      color: #1F2937;
+      color: var(--text-primary);
       transition: all 0.3s;
     }
     .tab.active { 
-      background: linear-gradient(135deg, #4B5EAA 0%, #6366F1 100%);
+      background: var(--button-primary);
       color: #FFFFFF;
       box-shadow: 0 5px 15px rgba(75,94,170,0.3);
     }
@@ -72,13 +124,14 @@
       animation: slideIn 0.3s;
     }
     @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-    .message.success { background: #D1FAE5; color: #065F46; border-left: 4px solid #0D9488; }
-    .message.error { background: #FEE2E2; color: #991B1B; border-left: 4px solid #DC2626; }
-    .message.info { background: #FEF3C7; color: #92400E; border-left: 4px solid #F59E0B; }
+    .message.success { background: var(--success-bg); color: var(--success-text); border-left: 4px solid var(--success-border); }
+    .message.error { background: var(--error-bg); color: var(--error-text); border-left: 4px solid var(--error-border); }
+    .message.info { background: var(--warning-bg); color: var(--warning-text); border-left: 4px solid var(--warning-border); }
+    .message.warning { background: #FEF3C7; color: #92400E; border-left: 4px solid #F59E0B; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    th { background: #F3F4F6; padding: 12px; text-align: left; font-weight: 600; color: #1F2937; }
-    td { padding: 12px; border-bottom: 1px solid #E5E7EB; font-size: 13px; color: #4B5563; }
-    tr:hover { background: #F9FAFB; }
+    th { background: var(--table-header); padding: 12px; text-align: left; font-weight: 600; color: var(--text-primary); }
+    td { padding: 12px; border-bottom: 1px solid var(--table-border); font-size: 13px; color: var(--text-secondary); }
+    tr:hover { background: var(--table-hover); }
     .header { 
       display: flex; 
       justify-content: space-between; 
@@ -91,13 +144,16 @@
       font-size: 32px; 
       font-weight: bold; 
       color: #4B5EAA;
-      text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+      text-shadow: 1px 1px 2px var(--shadow);
       display: flex;
       align-items: center;
       gap: 10px;
     }
+    [data-theme="dark"] .balance-display {
+      color: #6366F1;
+    }
     .balance-toggle {
-      background: #E5E7EB;
+      background: var(--button-secondary);
       border: none;
       width: 40px;
       height: 40px;
@@ -110,9 +166,10 @@
       transition: all 0.3s;
       padding: 0;
       margin: 0;
+      color: var(--text-primary);
     }
     .balance-toggle:hover {
-      background: #D1D5DB;
+      background: var(--border-color);
       transform: scale(1.05);
     }
     .balance-hidden {
@@ -122,11 +179,11 @@
     .address { 
       font-family: 'Courier New', monospace; 
       font-size: 12px; 
-      color: #6B7280;
+      color: var(--text-secondary);
       word-break: break-all;
     }
     .log-entry { 
-      background: #F3F4F6; 
+      background: var(--table-header); 
       padding: 12px; 
       margin-bottom: 8px; 
       border-radius: 8px;
@@ -137,11 +194,11 @@
       justify-content: space-between; 
       margin-bottom: 8px;
       font-weight: 600;
-      color: #1F2937;
+      color: var(--text-primary);
     }
     .log-data { 
       font-size: 12px; 
-      color: #4B5563; 
+      color: var(--text-secondary); 
       white-space: pre-wrap;
       font-family: 'Courier New', monospace;
     }
@@ -168,7 +225,7 @@
     }
     .modal.show { display: flex; align-items: center; justify-content: center; }
     .modal-content {
-      background: #FFFFFF;
+      background: var(--bg-card);
       border-radius: 16px;
       padding: 30px;
       max-width: 600px;
@@ -185,10 +242,10 @@
       align-items: center;
       margin-bottom: 20px;
       padding-bottom: 15px;
-      border-bottom: 2px solid #E5E7EB;
+      border-bottom: 2px solid var(--border-color);
     }
     .modal-close {
-      background: #E5E7EB;
+      background: var(--button-secondary);
       border: none;
       width: 35px;
       height: 35px;
@@ -197,16 +254,17 @@
       font-size: 20px;
       line-height: 1;
       margin: 0;
+      color: var(--text-primary);
     }
-    .modal-close:hover { background: #D1D5DB; transform: none; }
+    .modal-close:hover { background: var(--border-color); transform: none; }
     .detail-row {
       display: flex;
       justify-content: space-between;
       padding: 12px 0;
-      border-bottom: 1px solid #F3F4F6;
+      border-bottom: 1px solid var(--table-border);
     }
-    .detail-label { color: #6B7280; font-weight: 600; }
-    .detail-value { color: #1F2937; font-weight: 500; text-align: right; word-break: break-all; }
+    .detail-label { color: var(--text-secondary); font-weight: 600; }
+    .detail-value { color: var(--text-primary); font-weight: 500; text-align: right; word-break: break-all; }
     .search-box {
       position: relative;
       margin-bottom: 15px;
@@ -223,7 +281,7 @@
       margin: 0;
     }
     .gas-fee-box {
-      background: #F3F4F6;
+      background: var(--table-header);
       padding: 15px;
       border-radius: 8px;
       margin: 15px 0;
@@ -240,7 +298,10 @@
       color: #4B5EAA;
       padding-top: 10px;
       margin-top: 10px;
-      border-top: 2px solid #D1D5DB;
+      border-top: 2px solid var(--border-color);
+    }
+    [data-theme="dark"] .gas-fee-row.total {
+      color: #6366F1;
     }
     .copy-btn {
       display: inline-flex;
@@ -270,17 +331,113 @@
       height: 300px;
       margin-top: 20px;
     }
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--border-color);
+      cursor: pointer;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+      z-index: 999;
+      box-shadow: 0 4px 12px var(--shadow);
+    }
+    .theme-toggle:hover {
+      transform: rotate(180deg) scale(1.1);
+    }
+    .security-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .security-badge.verified {
+      background: #D1FAE5;
+      color: #065F46;
+      border: 1px solid #0D9488;
+    }
+    .security-badge.warning {
+      background: #FEF3C7;
+      color: #92400E;
+      border: 1px solid #F59E0B;
+    }
+    .security-badge.danger {
+      background: #FEE2E2;
+      color: #991B1B;
+      border: 1px solid #DC2626;
+    }
+    [data-theme="dark"] .security-badge.verified {
+      background: #064E3B;
+      color: #D1FAE5;
+    }
+    [data-theme="dark"] .security-badge.warning {
+      background: #78350F;
+      color: #FEF3C7;
+    }
+    [data-theme="dark"] .security-badge.danger {
+      background: #7F1D1D;
+      color: #FEE2E2;
+    }
+    .phishing-warning {
+      background: #FEF3C7;
+      border: 2px solid #F59E0B;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+      display: none;
+    }
+    [data-theme="dark"] .phishing-warning {
+      background: #78350F;
+      border-color: #F59E0B;
+    }
+    .phishing-warning.show {
+      display: block;
+      animation: shake 0.5s;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+    .address-validation {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: -10px;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+    .validation-icon {
+      font-size: 16px;
+    }
     @media (max-width: 768px) {
       .grid-2 { grid-template-columns: 1fr; }
       .header { flex-direction: column; text-align: center; }
+      .theme-toggle { top: 10px; right: 10px; width: 45px; height: 45px; }
     }
-    h1, h2 { margin-bottom: 15px; color: #1F2937; }
+    h1, h2 { margin-bottom: 15px; color: var(--text-primary); }
     h1 { font-size: 28px; }
     h2 { font-size: 20px; }
-    .loading { text-align: center; padding: 40px; color: #F3F4F6; font-size: 18px; }
+    .loading { text-align: center; padding: 40px; color: var(--text-primary); font-size: 18px; }
   </style>
 </head>
 <body>
+  <!-- Theme Toggle Button -->
+  <button class="theme-toggle" onclick="toggleTheme()" title="Chuyển đổi chế độ sáng/tối">
+    <span id="themeIcon">🌙</span>
+  </button>
+
   <div id="app" class="container">
     <div class="loading">⏳ Đang khởi tạo ví...</div>
   </div>
@@ -304,9 +461,126 @@
     let balanceVisible = true;
     let currentBalanceValue = '0.000000';
 
+    // ==================== THEME MANAGEMENT ====================
+    
+    function initTheme() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      const root = document.documentElement;
+      root.dataset.theme = savedTheme;
+      updateThemeIcon(savedTheme);
+    }
+
+    function toggleTheme() {
+      const root = document.documentElement;
+      const currentTheme = root.dataset.theme || 'light';
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      root.dataset.theme = newTheme;
+      localStorage.setItem('theme', newTheme);
+      updateThemeIcon(newTheme);
+      
+      // Re-render chart if visible
+      if (currentPage === 'dashboard' && localStorage.getItem('dashboardTab') === 'chart') {
+        setTimeout(() => renderBalanceChart(), 100);
+      }
+    }
+
+    function updateThemeIcon(theme) {
+      const icon = document.getElementById('themeIcon');
+      if (icon) {
+        icon.textContent = theme === 'light' ? '🌙' : '☀️';
+      }
+    }
+
+    // ==================== SECURITY FUNCTIONS ====================
+    
+    // Danh sách đen địa chỉ phishing (mẫu - có thể mở rộng)
+    const BLACKLIST_ADDRESSES = new Set([
+      '0x0000000000000000000000000000000000000000',
+      '0xdead000000000000000000000000000000000000'
+    ]);
+
+    // Kiểm tra địa chỉ có hợp lệ không
+    function validateAddress(address) {
+      if (!address) {
+        return { valid: false, message: '❌ Địa chỉ không được để trống' };
+      }
+
+      // Kiểm tra format cơ bản
+      if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+        return { valid: false, message: '❌ Địa chỉ không đúng định dạng (0x + 40 ký tự hex)' };
+      }
+
+      // Kiểm tra blacklist
+      if (BLACKLIST_ADDRESSES.has(address.toLowerCase())) {
+        return { valid: false, message: '⚠️ CẢNH BÁO: Địa chỉ này nằm trong danh sách đen!' };
+      }
+
+      // Kiểm tra checksum
+      try {
+        const checksumAddress = web3.utils.toChecksumAddress(address);
+        
+        // Nếu địa chỉ có chữ hoa/thường hỗn hợp nhưng không khớp checksum
+        if (address !== address.toLowerCase() && address !== address.toUpperCase()) {
+          if (address !== checksumAddress) {
+            return { 
+              valid: false, 
+              message: '⚠️ Checksum không hợp lệ! Địa chỉ có thể đã bị sửa đổi.',
+              corrected: checksumAddress
+            };
+          }
+        }
+
+        return { valid: true, message: '✅ Địa chỉ hợp lệ', checksumAddress };
+      } catch (err) {
+        return { valid: false, message: '❌ Địa chỉ không hợp lệ: ' + err.message };
+      }
+    }
+
+    // Kiểm tra phishing dựa trên pattern
+    function checkPhishingPattern(address) {
+      const warnings = [];
+
+      // Kiểm tra địa chỉ null
+      if (address.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+        warnings.push('🚨 Địa chỉ NULL - tiền sẽ bị mất vĩnh viễn!');
+      }
+
+      // Kiểm tra nhiều số 0 liên tiếp (có thể là typo)
+      if (/0{8,}/.test(address)) {
+        warnings.push('⚠️ Địa chỉ chứa nhiều số 0 liên tiếp - kiểm tra kỹ!');
+      }
+
+      // Kiểm tra pattern lặp lại đáng ngờ
+      if (/(.)\1{10,}/.test(address)) {
+        warnings.push('⚠️ Địa chỉ có ký tự lặp lại bất thường!');
+      }
+
+      return warnings;
+    }
+
+    // Hiển thị cảnh báo phishing
+    function showPhishingWarning(warnings) {
+      const warningDiv = document.getElementById('phishingWarning');
+      if (!warningDiv) return;
+
+      if (warnings.length > 0) {
+        warningDiv.innerHTML = `
+          <div style="display: flex; align-items: start; gap: 10px;">
+            <div style="font-size: 24px;">⚠️</div>
+            <div>
+              <div style="font-weight: bold; margin-bottom: 5px;">CẢNH BÁO BẢO MẬT</div>
+              ${warnings.map(w => `<div style="margin: 5px 0;">• ${w}</div>`).join('')}
+            </div>
+          </div>
+        `;
+        warningDiv.classList.add('show');
+      } else {
+        warningDiv.classList.remove('show');
+      }
+    }
+
     // ==================== STORAGE FUNCTIONS ====================
     
-    // Lưu lịch sử số dư
     function saveBalanceHistory(address, balance) {
       const historyKey = `balanceHistory_${address}`;
       let history = JSON.parse(localStorage.getItem(historyKey) || '[]');
@@ -314,7 +588,6 @@
       const now = new Date().toISOString();
       const lastEntry = history.at(-1);
       
-      // Chỉ lưu nếu số dư thay đổi hoặc đã qua 1 phút
       if (!lastEntry || 
           lastEntry.balance !== balance || 
           (new Date(now) - new Date(lastEntry.timestamp)) > 60000) {
@@ -323,7 +596,6 @@
           timestamp: now
         });
         
-        // Giới hạn 100 điểm dữ liệu
         if (history.length > 100) {
           history = history.slice(-100);
         }
@@ -332,40 +604,33 @@
       }
     }
 
-    // Lấy lịch sử số dư
     function getBalanceHistory(address) {
       const historyKey = `balanceHistory_${address}`;
       return JSON.parse(localStorage.getItem(historyKey) || '[]');
     }
 
-    // Lưu số dư hiện tại
     function saveCurrentBalance(address, balance) {
       const balanceKey = `savedBalance_${address}`;
       localStorage.setItem(balanceKey, balance);
     }
 
-    // Lấy số dư đã lưu
     function getSavedBalance(address) {
       const balanceKey = `savedBalance_${address}`;
       return localStorage.getItem(balanceKey);
     }
 
-    // Khôi phục số dư nếu bị reset
     async function restoreBalanceIfNeeded(address) {
       try {
         const currentBalance = await getBalance(address);
         const savedBalance = getSavedBalance(address);
         
-        // Nếu số dư hiện tại = 0 nhưng đã từng có số dư > 0
         if (savedBalance && Number.parseFloat(savedBalance) > 0 && Number.parseFloat(currentBalance) === 0) {
           console.log(`🔄 Phát hiện số dư bị reset. Đang khôi phục ${savedBalance} ETH...`);
           
-          // Lấy dev account để fund
           const accounts = await web3.eth.getAccounts();
           if (accounts && accounts.length > 0) {
             const devAddress = accounts[0];
             
-            // Chuyển tiền từ dev account
             await web3.eth.sendTransaction({
               from: devAddress,
               to: address,
@@ -394,7 +659,6 @@
 
     // ==================== WEB3 FUNCTIONS ====================
     
-    // Khởi tạo Web3
     async function initWeb3() {
       try {
         web3 = new Web3(new Web3.providers.HttpProvider(GETH_RPC));
@@ -407,7 +671,6 @@
       }
     }
 
-    // Ghi log vào localStorage
     function logToBackend(event, data) {
       const logs = JSON.parse(localStorage.getItem('gethLogs') || '[]');
       logs.unshift({
@@ -419,7 +682,6 @@
       console.log(`[GETH LOG] ${event}:`, data);
     }
 
-    // Tạo tài khoản mới
     async function createAccount(password) {
       try {
         const account = web3.eth.accounts.create();
@@ -436,7 +698,6 @@
       }
     }
 
-    // Import account dev từ Geth
     async function importDevAccount() {
       try {
         const accounts = await web3.eth.getAccounts();
@@ -463,7 +724,6 @@
       }
     }
 
-    // Kiểm tra số dư
     async function getBalance(address) {
       try {
         const balance = await web3.eth.getBalance(address);
@@ -473,7 +733,6 @@
       }
     }
 
-    // Tính gas fee
     async function estimateGasFee(fromAddress, toAddress, amount) {
       try {
         const gasPrice = await web3.eth.getGasPrice();
@@ -492,7 +751,6 @@
       }
     }
 
-    // Gửi giao dịch (hỗ trợ cả dev account và encrypted account)
     async function sendTransaction(fromAddress, toAddress, amount, password) {
       try {
         const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
@@ -513,7 +771,6 @@
 
         let receipt;
 
-        // Nếu là dev account thì gửi trực tiếp qua Geth
         if (account.type === 'dev') {
           const tx = {
             from: fromAddress,
@@ -525,7 +782,6 @@
 
           receipt = await web3.eth.sendTransaction(tx);
         } else {
-          // Account thường cần decrypt
           let decrypted;
           try {
             decrypted = web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
@@ -584,7 +840,7 @@
       return `
         <div class="card" style="max-width: 500px; margin: 50px auto;">
           <h1 style="text-align: center;">🔐 Ví Blockchain</h1>
-          <p style="text-align: center; color: #6B7280; margin-bottom: 25px;">
+          <p style="text-align: center; color: var(--text-secondary); margin-bottom: 25px;">
             ${mode === 'login' ? 'Đăng nhập tài khoản' : 'Tạo tài khoản mới'}
           </p>
 
@@ -602,7 +858,7 @@
               <input type="password" id="password" placeholder="Mật khẩu (≥ 6 ký tự)" />
               <input type="password" id="confirmPassword" placeholder="Xác nhận mật khẩu" />
               <button onclick="handleRegister()">✨ Tạo tài khoản</button>
-              <div style="text-align: center; margin: 10px 0; color: #6B7280;">hoặc</div>
+              <div style="text-align: center; margin: 10px 0; color: var(--text-secondary);">hoặc</div>
               <button class="success" onclick="handleImportDevAccount()">🔥 Import Dev Account</button>
             </div>
           ` : `
@@ -631,6 +887,9 @@
                 <button class="copy-btn" onclick="copyToClipboard('${currentAccount}', this)" title="Copy address">
                   📋
                 </button>
+              </div>
+              <div class="security-badge verified">
+                ✅ Địa chỉ đã xác thực checksum
               </div>
             </div>
             <div style="text-align: right;">
@@ -681,7 +940,7 @@
     function renderChartTab() {
       return `
         <h2>📈 Biểu đồ số dư theo thời gian</h2>
-        <p style="color: #6B7280; font-size: 13px; margin-bottom: 15px;">
+        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 15px;">
           Theo dõi sự thay đổi số dư của ví ${currentAccount.slice(0, 10)}...
         </p>
         <div id="chartLoadingMessage"></div>
@@ -708,13 +967,17 @@
         <h2>💸 Chuyển tiền</h2>
         ${isDevAccount ? '<p style="color: #0D9488; font-size: 13px; margin-bottom: 10px;">🔥 Dev Account - Không cần mật khẩu</p>' : ''}
         <input type="text" value="${currentAccount}" disabled />
-        <input type="text" id="transferTo" placeholder="Địa chỉ nhận (0x...)" oninput="calculateGasFee()" />
+        <input type="text" id="transferTo" placeholder="Địa chỉ nhận (0x...)" oninput="validateTransferAddress()" />
+        
+        <div id="addressValidation" class="address-validation"></div>
+        <div id="phishingWarning" class="phishing-warning"></div>
+        
         <input type="number" id="transferAmount" placeholder="Số ETH" step="0.001" oninput="calculateGasFee()" />
         
         <div id="gasFeeDisplay"></div>
         
         ${isDevAccount ? '' : '<input type="password" id="transferPassword" placeholder="Mật khẩu ví" />'}
-        <button onclick="handleTransfer()">🚀 Gửi giao dịch</button>
+        <button onclick="handleTransfer()" id="transferBtn">🚀 Gửi giao dịch</button>
         <div id="transferMessage"></div>
       `;
     }
@@ -724,7 +987,7 @@
       
       return `
         <h2>📜 Lịch sử giao dịch</h2>
-        <p style="color: #6B7280; font-size: 13px; margin-bottom: 15px;">💡 Click vào bất kỳ giao dịch nào để xem chi tiết</p>
+        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 15px;">💡 Click vào bất kỳ giao dịch nào để xem chi tiết</p>
         
         <div class="search-box">
           <input type="text" id="searchTx" placeholder="Tìm kiếm theo hash hoặc address..." />
@@ -732,7 +995,7 @@
         </div>
         
         ${history.length === 0 ? 
-          '<p style="text-align: center; color: #6B7280; padding: 40px;">Chưa có giao dịch nào</p>' :
+          '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">Chưa có giao dịch nào</p>' :
           `<div style="overflow-x: auto;">
             <table>
               <thead>
@@ -776,7 +1039,7 @@
       const logs = JSON.parse(localStorage.getItem('gethLogs') || '[]');
       
       if (logs.length === 0) {
-        return '<h2>📊 Backend Logs</h2><p style="text-align: center; color: #6B7280; padding: 40px;">Chưa có log nào</p>';
+        return '<h2>📊 Backend Logs</h2><p style="text-align: center; color: var(--text-secondary); padding: 40px;">Chưa có log nào</p>';
       }
 
       return `
@@ -786,13 +1049,59 @@
             <div class="log-entry">
               <div class="log-header">
                 <span style="color: #6366F1;">${log.event}</span>
-                <span style="font-size: 12px; color: #6B7280;">${new Date(log.timestamp).toLocaleString('vi-VN')}</span>
+                <span style="font-size: 12px; color: var(--text-secondary);">${new Date(log.timestamp).toLocaleString('vi-VN')}</span>
               </div>
               <div class="log-data">${JSON.stringify(log.data, null, 2)}</div>
             </div>
           `).join('')}
         </div>
       `;
+    }
+
+    // ==================== ADDRESS VALIDATION ====================
+    
+    function validateTransferAddress() {
+      const address = document.getElementById('transferTo').value.trim();
+      const validationDiv = document.getElementById('addressValidation');
+      const transferBtn = document.getElementById('transferBtn');
+      
+      if (!address) {
+        validationDiv.innerHTML = '';
+        showPhishingWarning([]);
+        return;
+      }
+
+      const validation = validateAddress(address);
+      
+      if (validation.valid) {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #0D9488;">✅</span>
+          <span style="color: #0D9488;">${validation.message}</span>
+        `;
+        
+        // Kiểm tra phishing patterns
+        const warnings = checkPhishingPattern(address);
+        showPhishingWarning(warnings);
+        
+        if (warnings.length > 0) {
+          transferBtn.disabled = false;
+          transferBtn.style.background = 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)';
+        } else {
+          transferBtn.disabled = false;
+          transferBtn.style.background = 'var(--button-primary)';
+        }
+        
+        calculateGasFee();
+      } else {
+        validationDiv.innerHTML = `
+          <span class="validation-icon" style="color: #DC2626;">❌</span>
+          <span style="color: #DC2626;">${validation.message}</span>
+          ${validation.corrected ? `<br><small style="color: var(--text-secondary); margin-left: 26px;">Địa chỉ đúng: ${validation.corrected}</small>` : ''}
+        `;
+        showPhishingWarning([]);
+        transferBtn.disabled = true;
+        document.getElementById('gasFeeDisplay').innerHTML = '';
+      }
     }
 
     // ==================== MODAL FUNCTIONS ====================
@@ -855,7 +1164,6 @@
       modal.classList.remove('show');
     }
 
-    // Copy to clipboard
     function copyToClipboard(text, button) {
       navigator.clipboard.writeText(text).then(() => {
         const originalText = button.innerHTML;
@@ -872,7 +1180,6 @@
       });
     }
 
-    // Đóng modal khi click bên ngoài
     globalThis.addEventListener('click', function(event) {
       const modal = document.getElementById('txDetailModal');
       if (event.target === modal) {
@@ -880,7 +1187,6 @@
       }
     });
 
-    // Toggle balance visibility
     function toggleBalanceVisibility() {
       balanceVisible = !balanceVisible;
       updateBalanceDisplay();
@@ -936,12 +1242,9 @@
           messageEl.innerHTML = '<div class="message info">⏳ Đang khởi tạo dữ liệu biểu đồ...</div>';
         }
         
-        // Tự động lưu điểm dữ liệu đầu tiên
         try {
           const balance = await getBalance(currentAccount);
           saveBalanceHistory(currentAccount, balance);
-          
-          // Render lại sau khi lưu
           setTimeout(() => renderBalanceChart(), 500);
           return;
         } catch (err) {
@@ -954,12 +1257,15 @@
         messageEl.innerHTML = '';
       }
 
-      // Destroy old chart
       if (balanceChartInstance) {
         balanceChartInstance.destroy();
       }
 
       const ctx = canvas.getContext('2d');
+      const root = document.documentElement;
+      const theme = root.dataset.theme || 'light';
+      const gridColor = theme === 'dark' ? 'rgba(75, 85, 99, 0.3)' : 'rgba(0, 0, 0, 0.05)';
+      const textColor = theme === 'dark' ? '#D1D5DB' : '#6B7280';
       
       const labels = history.map(item => {
         const date = new Date(item.timestamp);
@@ -980,14 +1286,14 @@
           datasets: [{
             label: 'Số dư (ETH)',
             data: data,
-            borderColor: '#4B5EAA',
-            backgroundColor: 'rgba(75, 94, 170, 0.1)',
+            borderColor: '#6366F1',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
             borderWidth: 3,
             fill: true,
             tension: 0.4,
             pointRadius: 4,
             pointHoverRadius: 6,
-            pointBackgroundColor: '#4B5EAA',
+            pointBackgroundColor: '#6366F1',
             pointBorderColor: '#FFFFFF',
             pointBorderWidth: 2
           }]
@@ -1001,7 +1307,7 @@
               position: 'top',
               labels: {
                 font: { size: 14, weight: 'bold' },
-                color: '#1F2937'
+                color: textColor
               }
             },
             tooltip: {
@@ -1025,18 +1331,18 @@
                 callback: function(value) {
                   return value.toFixed(4) + ' ETH';
                 },
-                color: '#6B7280',
+                color: textColor,
                 font: { size: 12 }
               },
               grid: {
-                color: 'rgba(0, 0, 0, 0.05)'
+                color: gridColor
               }
             },
             x: {
               ticks: {
                 maxRotation: 45,
                 minRotation: 45,
-                color: '#6B7280',
+                color: textColor,
                 font: { size: 11 }
               },
               grid: {
@@ -1064,7 +1370,6 @@
 
     // ==================== TRANSACTION FUNCTIONS ====================
     
-    // Tính toán gas fee khi nhập
     async function calculateGasFee() {
       const to = document.getElementById('transferTo').value;
       const amount = document.getElementById('transferAmount').value;
@@ -1075,11 +1380,17 @@
         return;
       }
 
+      // Validate address first
+      const validation = validateAddress(to);
+      if (!validation.valid) {
+        return;
+      }
+
       try {
         const gasInfo = await estimateGasFee(currentAccount, to, amount);
         displayEl.innerHTML = `
           <div class="gas-fee-box">
-            <div style="font-weight: bold; margin-bottom: 10px; color: #1F2937;">⛽ Chi phí giao dịch</div>
+            <div style="font-weight: bold; margin-bottom: 10px; color: var(--text-primary);">⛽ Chi phí giao dịch</div>
             <div class="gas-fee-row">
               <span>Gas Price:</span>
               <span>${Number.parseFloat(gasInfo.gasPrice).toFixed(2)} Gwei</span>
@@ -1103,7 +1414,6 @@
       }
     }
 
-    // Tìm kiếm giao dịch
     function searchTransaction() {
       const searchTerm = document.getElementById('searchTx').value.toLowerCase().trim();
       const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
@@ -1121,7 +1431,7 @@
 
       const tbody = document.getElementById('historyTableBody');
       if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #6B7280;">Không tìm thấy giao dịch nào</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: var(--text-secondary);">Không tìm thấy giao dịch nào</td></tr>';
       } else {
         tbody.innerHTML = renderHistoryRows(filtered);
       }
@@ -1178,7 +1488,6 @@
       try {
         const { address, balance } = await importDevAccount();
         
-        // Kiểm tra xem đã import chưa
         const accounts = JSON.parse(localStorage.getItem('walletAccounts') || '[]');
         const existing = accounts.find(a => a.address.toLowerCase() === address.toLowerCase());
         
@@ -1237,9 +1546,7 @@
           return;
         }
 
-        // Dev account không cần verify password
         if (account.type !== 'dev') {
-          // Verify password cho user account
           web3.eth.accounts.decrypt(JSON.parse(account.encrypted), password);
         }
         
@@ -1272,20 +1579,16 @@
       if (!currentAccount) return;
       
       try {
-        // Kiểm tra và khôi phục số dư nếu cần
         const restored = await restoreBalanceIfNeeded(currentAccount);
         if (restored) {
-          // Đợi một chút để transaction được confirm
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
         const balance = await getBalance(currentAccount);
         const formattedBalance = Number.parseFloat(balance).toFixed(6);
         
-        // Lưu vào biến global để đồng bộ
         currentBalanceValue = formattedBalance;
         
-        // Cập nhật UI
         const balanceEl = document.getElementById('currentBalance');
         if (balanceEl) {
           if (balanceVisible) {
@@ -1297,10 +1600,7 @@
           }
         }
         
-        // Lưu số dư hiện tại
         saveCurrentBalance(currentAccount, balance);
-        
-        // Lưu lịch sử số dư
         saveBalanceHistory(currentAccount, balance);
       } catch (err) {
         console.error('Lỗi load balance:', err);
@@ -1316,19 +1616,32 @@
         return;
       }
 
+      const validation = validateAddress(address);
+      if (!validation.valid) {
+        resultEl.innerHTML = `<div class="message error">${validation.message}</div>`;
+        return;
+      }
+
       resultEl.innerHTML = '<div class="message info">⏳ Đang kiểm tra...</div>';
 
       try {
         const balance = await getBalance(address);
         const formattedBalance = Number.parseFloat(balance).toFixed(6);
-        resultEl.innerHTML = `<div class="message success">💰 Số dư: <strong>${formattedBalance} ETH</strong></div>`;
+        resultEl.innerHTML = `
+          <div class="message success">
+            💰 Số dư: <strong>${formattedBalance} ETH</strong>
+            <div class="security-badge verified" style="margin-top: 10px;">
+              ✅ Địa chỉ hợp lệ (Checksum đã xác thực)
+            </div>
+          </div>
+        `;
       } catch (err) {
         resultEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
       }
     }
 
     async function handleTransfer() {
-      const to = document.getElementById('transferTo').value;
+      const to = document.getElementById('transferTo').value.trim();
       const amount = document.getElementById('transferAmount').value;
       const passwordInput = document.getElementById('transferPassword');
       const password = passwordInput ? passwordInput.value : '';
@@ -1343,22 +1656,48 @@
         return;
       }
 
+      const validation = validateAddress(to);
+      if (!validation.valid) {
+        messageEl.innerHTML = `<div class="message error">❌ ${validation.message}</div>`;
+        return;
+      }
+
+      const warnings = checkPhishingPattern(to);
+      if (warnings.length > 0) {
+        const confirmed = confirm('⚠️ CẢNH BÁO BẢO MẬT!\n\n' + warnings.join('\n') + '\n\nBạn có chắc chắn muốn tiếp tục?');
+        if (!confirmed) {
+          messageEl.innerHTML = '<div class="message warning">🛡️ Giao dịch đã bị hủy vì lý do bảo mật</div>';
+          return;
+        }
+      }
+
       if (!isDevAccount && !password) {
         messageEl.innerHTML = '<div class="message error">❌ Vui lòng nhập mật khẩu</div>';
+        return;
+      }
+
+      const checksumTo = web3.utils.toChecksumAddress(to);
+      const confirmMsg = `🔐 XÁC NHẬN GIAO DỊCH\n\n` +
+        `Từ: ${currentAccount}\n` +
+        `Đến: ${checksumTo}\n` +
+        `Số tiền: ${amount} ETH\n\n` +
+        `Bạn có chắc chắn muốn thực hiện giao dịch này?`;
+      
+      if (!confirm(confirmMsg)) {
+        messageEl.innerHTML = '<div class="message info">❌ Giao dịch đã bị hủy</div>';
         return;
       }
 
       messageEl.innerHTML = '<div class="message info">⏳ Đang gửi giao dịch...</div>';
 
       try {
-        const receipt = await sendTransaction(currentAccount, to, amount, password);
+        const receipt = await sendTransaction(currentAccount, checksumTo, amount, password);
         
-        // Lưu vào history
         const history = JSON.parse(localStorage.getItem('txHistory') || '[]');
         history.unshift({
           hash: receipt.transactionHash,
           from: currentAccount,
-          to,
+          to: checksumTo,
           value: amount,
           blockNumber: receipt.blockNumber,
           gasFee: receipt.gasFee,
@@ -1373,6 +1712,9 @@
           <div class="message success">
             ✅ Thành công!<br>
             <small>Hash: ${receipt.transactionHash}</small><br>
+            <div class="security-badge verified" style="display: inline-flex; margin-top: 10px;">
+              🔒 Giao dịch đã được xác thực và ghi vào blockchain
+            </div><br>
             <button onclick='showTransactionDetail(${txJson})' 
                     style="margin-top: 10px; width: auto; padding: 8px 16px;">
               🔍 Xem chi tiết
@@ -1384,23 +1726,30 @@
         document.getElementById('transferAmount').value = '';
         if (passwordInput) passwordInput.value = '';
         document.getElementById('gasFeeDisplay').innerHTML = '';
+        document.getElementById('addressValidation').innerHTML = '';
+        showPhishingWarning([]);
         
-        // Load balance và cập nhật biểu đồ
         await loadBalance();
         
-        // Nếu đang ở tab biểu đồ thì refresh
         if (localStorage.getItem('dashboardTab') === 'chart') {
           setTimeout(() => refreshChart(), 1000);
         }
       } catch (err) {
         messageEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
+        
+        logToBackend('TRANSACTION_FAILED', {
+          from: currentAccount,
+          to: checksumTo,
+          amount: amount,
+          error: err.message,
+          timestamp: new Date().toISOString()
+        });
       }
     }
 
-    // ==================== INITIALIZATION ====================
-    
-    // Start app with IIFE
-   void async function() {
+    void async function() {
+      initTheme();
+      
       const connected = await initWeb3();
       
       if (!connected) {
