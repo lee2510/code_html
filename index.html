@@ -302,6 +302,7 @@
     let currentAccount = null;
     let currentPage = 'login';
     let balanceVisible = true;
+    let currentBalanceValue = '0.000000';
 
     // ==================== STORAGE FUNCTIONS ====================
     
@@ -311,7 +312,7 @@
       let history = JSON.parse(localStorage.getItem(historyKey) || '[]');
       
       const now = new Date().toISOString();
-      const lastEntry = history.at(history.length - 1);
+      const lastEntry = history.length > 0 ? history[history.length - 1] : null;
       
       // Chỉ lưu nếu số dư thay đổi hoặc đã qua 1 phút
       if (!lastEntry || 
@@ -356,7 +357,7 @@
         const savedBalance = getSavedBalance(address);
         
         // Nếu số dư hiện tại = 0 nhưng đã từng có số dư > 0
-        if (savedBalance && parseFloat(savedBalance) > 0 && parseFloat(currentBalance) === 0) {
+        if (savedBalance && Number.parseFloat(savedBalance) > 0 && Number.parseFloat(currentBalance) === 0) {
           console.log(`🔄 Phát hiện số dư bị reset. Đang khôi phục ${savedBalance} ETH...`);
           
           // Lấy dev account để fund
@@ -475,7 +476,6 @@
     // Tính gas fee
     async function estimateGasFee(fromAddress, toAddress, amount) {
       try {
-        const valueWei = web3.utils.toWei(amount.toString(), 'ether');
         const gasPrice = await web3.eth.getGasPrice();
         const gasLimit = 21000;
         const gasFeeWei = BigInt(gasPrice) * BigInt(gasLimit);
@@ -638,7 +638,7 @@
                 <button class="balance-toggle" onclick="toggleBalanceVisibility()" title="Ẩn/Hiện số dư">
                   👁️
                 </button>
-                <span id="currentBalance">0 ETH</span>
+                <span id="currentBalance">0.000000 ETH</span>
               </div>
               <button class="danger" onclick="handleLogout()" style="width: auto; margin-top: 10px;">
                 🚪 Đăng xuất
@@ -755,7 +755,7 @@
 
     function renderHistoryRows(history) {
       return history.map(tx => `
-        <tr onclick='showTransactionDetail(${JSON.stringify(tx).replaceAll(/'/g, "&apos;")})' style="cursor: pointer;">
+        <tr onclick='showTransactionDetail(${JSON.stringify(tx).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})' style="cursor: pointer;">
           <td>${new Date(tx.timestamp).toLocaleString('vi-VN')}</td>
           <td class="address">${tx.from.slice(0, 10)}...</td>
           <td class="address">${tx.to.slice(0, 10)}...</td>
@@ -802,7 +802,7 @@
         <div class="detail-row">
           <span class="detail-label">🔗 Transaction Hash:</span>
           <span class="detail-value" style="display: flex; align-items: center; justify-content: flex-end;">
-            <span style="word-break: break-all; margin-right: 8px;">${tx.hash ? tx.hash : 'N/A'}</span>
+            <span style="word-break: break-all; margin-right: 8px;">${tx.hash || 'N/A'}</span>
             ${tx.hash ? `<button class="copy-btn" onclick="event.stopPropagation(); copyToClipboard('${tx.hash}', this)" title="Copy hash">📋</button>` : ''}
           </span>
         </div>
@@ -870,12 +870,12 @@
     }
 
     // Đóng modal khi click bên ngoài
-    window.onclick = function(event) {
+    globalThis.addEventListener('click', function(event) {
       const modal = document.getElementById('txDetailModal');
       if (event.target === modal) {
         closeModal();
       }
-    }
+    });
 
     // Toggle balance visibility
     function toggleBalanceVisibility() {
@@ -887,10 +887,8 @@
       const balanceEl = document.getElementById('currentBalance');
       if (!balanceEl) return;
       
-      const actualBalance = balanceEl.getAttribute('data-balance') || '0.000000';
-      
       if (balanceVisible) {
-        balanceEl.textContent = actualBalance + ' ETH';
+        balanceEl.textContent = currentBalanceValue + ' ETH';
         balanceEl.classList.remove('balance-hidden');
       } else {
         balanceEl.textContent = '••••••';
@@ -1278,12 +1276,14 @@
         }
         
         const balance = await getBalance(currentAccount);
+        const formattedBalance = Number.parseFloat(balance).toFixed(6);
+        
+        // Lưu vào biến global để đồng bộ
+        currentBalanceValue = formattedBalance;
+        
+        // Cập nhật UI
         const balanceEl = document.getElementById('currentBalance');
         if (balanceEl) {
-          // Lưu số dư gốc chính xác (6 chữ số thập phân)
-          const formattedBalance = Number.parseFloat(balance).toFixed(6);
-          balanceEl.setAttribute('data-balance', formattedBalance);
-          
           if (balanceVisible) {
             balanceEl.textContent = formattedBalance + ' ETH';
             balanceEl.classList.remove('balance-hidden');
@@ -1316,7 +1316,8 @@
 
       try {
         const balance = await getBalance(address);
-        resultEl.innerHTML = `<div class="message success">💰 Số dư: <strong>${Number.parseFloat(balance).toFixed(6)} ETH</strong></div>`;
+        const formattedBalance = Number.parseFloat(balance).toFixed(6);
+        resultEl.innerHTML = `<div class="message success">💰 Số dư: <strong>${formattedBalance} ETH</strong></div>`;
       } catch (err) {
         resultEl.innerHTML = `<div class="message error">❌ Lỗi: ${err.message}</div>`;
       }
@@ -1367,7 +1368,7 @@
           <div class="message success">
             ✅ Thành công!<br>
             <small>Hash: ${receipt.transactionHash}</small><br>
-            <button onclick='showTransactionDetail(${JSON.stringify(history[0]).replaceAll(/'/g, "&apos;")})' 
+            <button onclick='showTransactionDetail(${JSON.stringify(history[0]).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})' 
                     style="margin-top: 10px; width: auto; padding: 8px 16px;">
               🔍 Xem chi tiết
             </button>
@@ -1393,7 +1394,7 @@
 
     // ==================== INITIALIZATION ====================
     
-    async function init() {
+    (async function init() {
       const connected = await initWeb3();
       
       if (!connected) {
@@ -1425,10 +1426,7 @@
         switchTab(localStorage.getItem('dashboardTab') || 'balance');
         setInterval(loadBalance, 10000);
       }
-    }
-
-    // Start app
-    init();
+    })();
   </script>
 </body>
 </html>
