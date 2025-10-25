@@ -1399,25 +1399,11 @@
 
     // ==================== INITIALIZATION ====================
     
-    // Start app with top-level await
-    try {
+    // Start app with IIFE
+   void async function() {
       const connected = await initWeb3();
       
-      if (connected) {
-        const savedAccount = localStorage.getItem('currentAccount');
-        if (savedAccount) {
-          currentAccount = savedAccount;
-          currentPage = 'dashboard';
-        }
-
-        render();
-        
-        if (currentPage === 'dashboard') {
-          await loadBalance();
-          switchTab(localStorage.getItem('dashboardTab') || 'balance');
-          setInterval(loadBalance, 10000);
-        }
-      } else {
+      if (!connected) {
         document.getElementById('app').innerHTML = `
           <div class="card" style="max-width: 600px; margin: 50px auto; text-align: center;">
             <h1 style="color: #DC2626;">❌ Không thể kết nối Geth</h1>
@@ -1430,17 +1416,23 @@
             <button onclick="location.reload()">🔄 Thử lại</button>
           </div>
         `;
+        return;
       }
-    } catch (error) {
-      console.error('Initialization error:', error);
-      document.getElementById('app').innerHTML = `
-        <div class="card" style="max-width: 600px; margin: 50px auto; text-align: center;">
-          <h1 style="color: #DC2626;">❌ Lỗi khởi tạo</h1>
-          <p style="margin: 20px 0; color: #991B1B;">${error.message}</p>
-          <button onclick="location.reload()">🔄 Thử lại</button>
-        </div>
-      `;
-    }
+
+      const savedAccount = localStorage.getItem('currentAccount');
+      if (savedAccount) {
+        currentAccount = savedAccount;
+        currentPage = 'dashboard';
+      }
+
+      render();
+      
+      if (currentPage === 'dashboard') {
+        await loadBalance();
+        switchTab(localStorage.getItem('dashboardTab') || 'balance');
+        setInterval(loadBalance, 10000);
+      }
+    }();
   </script>
 </body>
 </html>
